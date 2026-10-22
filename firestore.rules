@@ -1,0 +1,155 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper functions enforcing trusted authentication and custom claims
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isUser(uid) {
+      return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function hasValidClaims() {
+      return isAuthenticated() &&
+        request.auth.token.role in ['ADMIN', 'EMPLOYEE'] &&
+        request.auth.token.organizationId is string &&
+        request.auth.token.organizationId.size() > 0;
+    }
+
+    function isOrgMember(organizationId) {
+      return hasValidClaims() && request.auth.token.organizationId == organizationId;
+    }
+
+    function isAdmin() {
+      return hasValidClaims() && request.auth.token.role == 'ADMIN';
+    }
+
+    // 1. Users collection: users/{uid}
+    // Users can read their own profile; Admins can read/query and create/update profiles in their organization.
+    match /users/{userId} {
+      allow read: if isUser(userId) || (isAdmin() && resource.data.organizationId == request.auth.token.organizationId);
+      allow create: if isAdmin() && request.resource.data.organizationId == request.auth.token.organizationId;
+      allow update: if (isUser(userId) && request.resource.data.organizationId == resource.data.organizationId && request.resource.data.role == resource.data.role) ||
+                       (isAdmin() && resource.data.organizationId == request.auth.token.organizationId && request.resource.data.organizationId == resource.data.organizationId);
+      allow delete: if false;
+    }
+
+    // 2. Organization-scoped collections
+    match /organizations/{organizationId} {
+      allow read: if isOrgMember(organizationId);
+      allow write: if false;
+
+      // Employee directory
+      match /employees/{employeeId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isAdmin() && isOrgMember(organizationId);
+        allow delete: if false;
+      }
+
+      // Products master
+      match /products/{productId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+      }
+
+      // Process templates and steps
+      match /processTemplates/{templateId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isAdmin() && isOrgMember(organizationId);
+
+        match /steps/{stepId} {
+          allow read: if isOrgMember(organizationId);
+          allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+        }
+      }
+
+      // Production orders, processes, and daily updates
+      match /productionOrders/{orderId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isOrgMember(organizationId);
+
+        match /processes/{processId} {
+          allow read: if isOrgMember(organizationId);
+          allow create, update: if isOrgMember(organizationId);
+
+          match /updates/{updateId} {
+            allow read: if isOrgMember(organizationId);
+            allow create: if isOrgMember(organizationId);
+          }
+        }
+      }
+
+      // Materials master
+      match /materials/{materialId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+      }
+
+      // Inventory balances: read-only from clients, modified via atomic transactions / functions
+      match /inventoryBalances/{materialLocationId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isOrgMember(organizationId);
+        allow delete: if false;
+      }
+
+      // Authoritative immutable inventory ledger
+      match /inventoryTransactions/{transactionId} {
+        allow read: if isOrgMember(organizationId);
+        allow create: if isOrgMember(organizationId);
+        allow update, delete: if false; // strictly immutable
+      }
+
+      // Process queries and responses
+      match /processQueries/{queryId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isOrgMember(organizationId);
+
+        match /responses/{responseId} {
+          allow read: if isOrgMember(organizationId);
+          allow create: if isOrgMember(organizationId);
+        }
+      }
+
+      // Notifications
+      match /notifications/{notificationId} {
+        allow read: if isOrgMember(organizationId) && (resource.data.recipientUid == request.auth.uid || isAdmin());
+        allow create, update: if isOrgMember(organizationId);
+      }
+
+      // Audit logs: append-only
+      match /auditLogs/{auditId} {
+        allow read: if isOrgMember(organizationId) && isAdmin();
+        allow create: if isOrgMember(organizationId);
+        allow update, delete: if false;
+      }
+
+      // Backward-compatibility aliases
+      match /production_orders/{orderId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isOrgMember(organizationId);
+      }
+
+      match /process_tasks/{taskId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isOrgMember(organizationId);
+      }
+
+      match /status_updates/{updateId} {
+        allow read: if isOrgMember(organizationId);
+        allow create: if isOrgMember(organizationId);
+      }
+
+      match /process_queries/{queryId} {
+        allow read: if isOrgMember(organizationId);
+        allow create, update: if isOrgMember(organizationId);
+      }
+    }
+
+    // Default deny for all other paths
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
