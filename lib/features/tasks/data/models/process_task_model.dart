@@ -28,9 +28,10 @@ class ProcessTask {
   });
 
   bool get isInProgress => status.toLowerCase() == 'in_progress';
-  bool get isPending => status.toLowerCase() == 'pending';
+  bool get isPending => status.toLowerCase() == 'pending' || status.toLowerCase() == 'assigned';
   bool get isPaused => status.toLowerCase() == 'paused';
   bool get isCompleted => status.toLowerCase() == 'completed';
+  bool get isAssigned => status.toLowerCase() == 'assigned';
 
   factory ProcessTask.fromFirestore(DocumentSnapshot doc) {
     final data = (doc.data() as Map<String, dynamic>?) ?? {};

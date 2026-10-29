@@ -14,8 +14,12 @@ class AppConstants {
 
   static const String appName = String.fromEnvironment(
     'APP_NAME',
-    defaultValue: 'Unity Production Tracker',
+    defaultValue: 'Unity Engineers Production Tracker',
   );
+
+  static const String companyName = 'Unity Engineers';
+  static const String companyAddress =
+      'B-15/2/61, MIDC, Waluj, Aurangabad, M.H. India. 431136';
 
   // Firebase / Backend
   static const String firebaseProjectId = String.fromEnvironment(

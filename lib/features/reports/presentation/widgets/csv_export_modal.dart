@@ -63,8 +63,8 @@ class CsvExportModal extends StatelessWidget {
           ),
         ],
       ),
-      content: SizedBox(
-        width: 520,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import 'package:unity/app/theme/app_colors.dart';
-import 'package:unity/app/theme/app_text_styles.dart';
+import 'package:unity/app/theme/admin_theme_extension.dart';
 import 'package:unity/core/constants/app_enums.dart';
 import 'package:unity/core/widgets/loading_widget.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/admin_page_header.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/empty_state.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/status_chip.dart';
 import 'package:unity/features/auth/data/models/app_user_model.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/employees/presentation/providers/employee_providers.dart';
@@ -28,6 +30,8 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
 
   void _showAddEmployeeDialog(BuildContext context, String orgId) {
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final tokens = context.adminTokens;
     final formKey = GlobalKey<FormState>();
     final nameController = TextEditingController();
     final emailController = TextEditingController();
@@ -41,99 +45,122 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          insetPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.outline),
+          ),
           title: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.primaryLight,
+                  color: tokens.primarySoft,
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: const Icon(Icons.person_add_rounded, color: AppColors.primary),
+                child: Icon(Icons.person_add_rounded, color: theme.colorScheme.primary, size: 20),
               ),
               const SizedBox(width: 12),
-              const Text('Add Employee'),
+              Expanded(
+                child: Text(
+                  'Add Employee',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: Form(
-              key: formKey,
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  TextFormField(
-                    controller: nameController,
-                    enabled: !isSubmitting,
-                    decoration: const InputDecoration(
-                      labelText: 'Full Name *',
-                      hintText: 'e.g. John Doe',
-                      prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
-                    ),
-                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: emailController,
-                    enabled: !isSubmitting,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email Address *',
-                      hintText: 'e.g. john@unity.com',
-                      prefixIcon: Icon(Icons.mail_outline_rounded, size: 20),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.trim().isEmpty) return 'Email is required';
-                      if (!v.contains('@') || !v.contains('.')) return 'Invalid email address';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  TextFormField(
-                    controller: passwordController,
-                    enabled: !isSubmitting,
-                    obscureText: obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Initial Password *',
-                      prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
-                          size: 20,
+          content: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Form(
+                  key: formKey,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      TextFormField(
+                        controller: nameController,
+                        enabled: !isSubmitting,
+                        decoration: const InputDecoration(
+                          labelText: 'Full Name *',
+                          hintText: 'e.g. John Doe',
+                          prefixIcon: Icon(Icons.person_outline_rounded, size: 20),
                         ),
-                        onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
+                        validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
                       ),
-                    ),
-                    validator: (v) {
-                      if (v == null || v.isEmpty) return 'Password is required';
-                      if (v.length < 6) return 'Password must be at least 6 characters';
-                      return null;
-                    },
-                  ),
-                  const SizedBox(height: 14),
-                  DropdownButtonFormField<UserRole>(
-                    initialValue: selectedRole,
-                    decoration: const InputDecoration(
-                      labelText: 'Organizational Role',
-                      prefixIcon: Icon(Icons.badge_outlined, size: 20),
-                    ),
-                    items: const [
-                      DropdownMenuItem(
-                        value: UserRole.employee,
-                        child: Text('EMPLOYEE (Standard Access)'),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: emailController,
+                        enabled: !isSubmitting,
+                        keyboardType: TextInputType.emailAddress,
+                        decoration: const InputDecoration(
+                          labelText: 'Email Address *',
+                          hintText: 'e.g. john@unity.com',
+                          prefixIcon: Icon(Icons.mail_outline_rounded, size: 20),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.trim().isEmpty) return 'Email is required';
+                          if (!v.contains('@') || !v.contains('.')) return 'Invalid email address';
+                          return null;
+                        },
                       ),
-                      DropdownMenuItem(
-                        value: UserRole.admin,
-                        child: Text('ADMIN (Full Control)'),
+                      const SizedBox(height: 14),
+                      TextFormField(
+                        controller: passwordController,
+                        enabled: !isSubmitting,
+                        obscureText: obscurePassword,
+                        decoration: InputDecoration(
+                          labelText: 'Initial Password *',
+                          prefixIcon: const Icon(Icons.lock_outline_rounded, size: 20),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined,
+                              size: 20,
+                            ),
+                            onPressed: () => setDialogState(() => obscurePassword = !obscurePassword),
+                          ),
+                        ),
+                        validator: (v) {
+                          if (v == null || v.isEmpty) return 'Password is required';
+                          if (v.length < 6) return 'Password must be at least 6 characters';
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 14),
+                      DropdownButtonFormField<UserRole>(
+                        initialValue: selectedRole,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Organizational Role',
+                          prefixIcon: Icon(Icons.badge_outlined, size: 20),
+                        ),
+                        items: const [
+                          DropdownMenuItem(
+                            value: UserRole.employee,
+                            child: Text('EMPLOYEE (Standard Access)', overflow: TextOverflow.ellipsis),
+                          ),
+                          DropdownMenuItem(
+                            value: UserRole.admin,
+                            child: Text('ADMIN (Full Control)', overflow: TextOverflow.ellipsis),
+                          ),
+                        ],
+                        onChanged: isSubmitting
+                            ? null
+                            : (val) {
+                                if (val != null) setDialogState(() => selectedRole = val);
+                              },
                       ),
                     ],
-                    onChanged: isSubmitting
-                        ? null
-                        : (val) {
-                            if (val != null) setDialogState(() => selectedRole = val);
-                          },
                   ),
-                ],
+                ),
               ),
             ),
           ),
@@ -164,7 +191,7 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                         messenger.showSnackBar(
                           SnackBar(
                             content: Text('Employee ${nameController.text.trim()} created successfully.'),
-                            backgroundColor: AppColors.success,
+                            backgroundColor: tokens.success,
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
@@ -173,7 +200,7 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                         messenger.showSnackBar(
                           SnackBar(
                             content: Text('$e'),
-                            backgroundColor: AppColors.error,
+                            backgroundColor: tokens.danger,
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
@@ -193,18 +220,28 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
     );
   }
 
-
   void _confirmToggleStatus(AppUserModel employee) async {
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final tokens = context.adminTokens;
     final newStatus = !employee.isActive;
     final action = newStatus ? 'Reactivate' : 'Deactivate';
 
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('$action Employee'),
+        backgroundColor: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.colorScheme.outline),
+        ),
+        title: Text(
+          '$action Employee',
+          style: TextStyle(fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface),
+        ),
         content: Text(
           'Are you sure you want to $action ${employee.fullName}? ${newStatus ? "They will regain access to their portal." : "They will be immediately blocked from signing in."}',
+          style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
         ),
         actions: [
           TextButton(
@@ -214,7 +251,8 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
             style: ElevatedButton.styleFrom(
-              backgroundColor: newStatus ? AppColors.success : AppColors.error,
+              backgroundColor: newStatus ? tokens.success : tokens.danger,
+              foregroundColor: Colors.white,
             ),
             child: Text(action),
           ),
@@ -224,9 +262,7 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
 
     if (confirmed == true) {
       try {
-        await ref
-            .read(employeeRepositoryProvider)
-            .setEmployeeStatus(
+        await ref.read(employeeRepositoryProvider).setEmployeeStatus(
               uid: employee.uid,
               isActive: newStatus,
               orgId: employee.organizationId,
@@ -242,7 +278,7 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
         messenger.showSnackBar(
           SnackBar(
             content: Text('Error updating status: $e'),
-            backgroundColor: AppColors.error,
+            backgroundColor: tokens.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -250,66 +286,136 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tokens = context.adminTokens;
     final employeesAsync = ref.watch(employeesStreamProvider);
     final currentUser = ref.watch(authStateProvider).user;
     final orgId = currentUser?.organizationId ?? 'org_unity_001';
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Employee Directory'),
-        actions: [
-          IconButton(
-            tooltip: 'Add Employee',
-            icon: const Icon(Icons.person_add_rounded),
-            onPressed: () => _showAddEmployeeDialog(context, orgId),
-          ),
-        ],
-      ),
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: Column(
         children: [
-          // Search & Filter Header
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            color: AppColors.surface,
-            child: Column(
-              children: [
-                TextField(
-                  controller: _searchController,
-                  onChanged: (_) => setState(() {}),
-                  decoration: InputDecoration(
-                    hintText: 'Search by name or email...',
-                    prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded, size: 18),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    isDense: true,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    _filterChip('All'),
-                    const SizedBox(width: 8),
-                    _filterChip('ADMIN'),
-                    const SizedBox(width: 8),
-                    _filterChip('EMPLOYEE'),
-                  ],
-                ),
-              ],
+          // 1. Admin Page Header
+          AdminPageHeader(
+            title: 'Employee Directory',
+            subtitle: 'Manage organizational access, roles, and employee accounts',
+            icon: Icons.people_alt_rounded,
+            trailing: ElevatedButton.icon(
+              onPressed: () => _showAddEmployeeDialog(context, orgId),
+              icon: const Icon(Icons.person_add_rounded, size: 18),
+              label: const Text('Add Employee'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
             ),
           ),
 
-          // Employees List
+          // 2. Search & Filter Bar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF152235) : Colors.white,
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0),
+                ),
+              ),
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final isWide = constraints.maxWidth >= 600;
+                final searchField = SizedBox(
+                  width: isWide ? 340 : double.infinity,
+                  height: 40,
+                  child: TextField(
+                    controller: _searchController,
+                    onChanged: (_) => setState(() {}),
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+                    decoration: InputDecoration(
+                      hintText: 'Search by name or email...',
+                      hintStyle: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                      prefixIcon: Icon(Icons.search_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                      suffixIcon: _searchController.text.isNotEmpty
+                          ? IconButton(
+                              icon: const Icon(Icons.clear_rounded, size: 16),
+                              onPressed: () {
+                                _searchController.clear();
+                                setState(() {});
+                              },
+                            )
+                          : null,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      filled: true,
+                      fillColor: isDark ? const Color(0xFF0E1728) : const Color(0xFFF8FAFC),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: theme.colorScheme.outline),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: theme.colorScheme.outline),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                      ),
+                    ),
+                  ),
+                );
+
+                final filterChips = Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildFilterChip('All'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('ADMIN'),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('EMPLOYEE'),
+                  ],
+                );
+
+                if (isWide) {
+                  return Row(
+                    children: [
+                      searchField,
+                      const SizedBox(width: 16),
+                      filterChips,
+                      const Spacer(),
+                      employeesAsync.maybeWhen(
+                        data: (list) => Text(
+                          '${list.length} total members',
+                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w500),
+                        ),
+                        orElse: () => const SizedBox.shrink(),
+                      ),
+                    ],
+                  );
+                } else {
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      searchField,
+                      const SizedBox(height: 10),
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: filterChips,
+                      ),
+                    ],
+                  );
+                }
+              },
+            ),
+          ),
+
+          // 3. Employee List Content
           Expanded(
             child: employeesAsync.when(
               data: (employees) {
@@ -322,53 +428,42 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                 }).toList();
 
                 if (filtered.isEmpty) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(32.0),
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.people_outline_rounded, size: 64, color: AppColors.textMuted),
-                          const SizedBox(height: 16),
-                          Text('No personnel found', style: AppTextStyles.titleMedium),
-                          const SizedBox(height: 6),
-                          Text(
-                            query.isNotEmpty
-                                ? 'No results matched your search.'
-                                : 'Add team members using the provision button above.',
-                            style: AppTextStyles.bodyMedium,
-                            textAlign: TextAlign.center,
-                          ),
-                        ],
-                      ),
-                    ),
+                  return EmptyStateWidget(
+                    icon: Icons.people_outline_rounded,
+                    title: 'No personnel found',
+                    description: query.isNotEmpty
+                        ? 'No employee accounts matched "$query".'
+                        : 'No team members in this filter category.',
                   );
                 }
 
                 return ListView.separated(
-                  padding: const EdgeInsets.all(16.0),
+                  padding: const EdgeInsets.all(20.0),
                   itemCount: filtered.length,
-                  separatorBuilder: (_, _) => const SizedBox(height: 12),
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, index) {
-
                     final employee = filtered[index];
                     final isAdmin = employee.role == UserRole.admin;
                     final isSelf = employee.uid == currentUser?.uid;
 
                     return Container(
                       decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
+                        color: theme.colorScheme.surface,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: theme.colorScheme.outline),
                       ),
                       child: ListTile(
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                         leading: CircleAvatar(
-                          backgroundColor: isAdmin ? AppColors.roleAdminBg : AppColors.roleEmployeeBg,
-                          foregroundColor: isAdmin ? AppColors.roleAdmin : AppColors.roleEmployee,
+                          backgroundColor: isAdmin
+                              ? (isDark ? const Color(0xFF1E3A5F) : const Color(0xFFE0E7FF))
+                              : (isDark ? const Color(0xFF132D28) : const Color(0xFFE6F5F2)),
+                          foregroundColor: isAdmin
+                              ? (isDark ? const Color(0xFF93C5FD) : const Color(0xFF3B82F6))
+                              : theme.colorScheme.primary,
                           child: Text(
                             employee.fullName.isNotEmpty ? employee.fullName[0].toUpperCase() : '?',
-                            style: const TextStyle(fontWeight: FontWeight.bold),
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 15),
                           ),
                         ),
                         title: Row(
@@ -376,19 +471,30 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                             Flexible(
                               child: Text(
                                 employee.fullName,
-                                style: AppTextStyles.titleSmall,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: theme.colorScheme.onSurface,
+                                ),
                                 overflow: TextOverflow.ellipsis,
                               ),
                             ),
                             if (isSelf) ...[
-                              const SizedBox(width: 6),
+                              const SizedBox(width: 8),
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                 decoration: BoxDecoration(
-                                  color: AppColors.surfaceVariant,
+                                  color: tokens.primarySoft,
                                   borderRadius: BorderRadius.circular(4),
                                 ),
-                                child: Text('You', style: AppTextStyles.labelSmall),
+                                child: Text(
+                                  'You',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: theme.colorScheme.primary,
+                                  ),
+                                ),
                               ),
                             ],
                           ],
@@ -397,38 +503,26 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             const SizedBox(height: 4),
-                            Text(employee.email, style: AppTextStyles.bodySmall),
+                            Text(
+                              employee.email,
+                              style: TextStyle(
+                                fontSize: 13,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
+                            ),
                             const SizedBox(height: 6),
                             Row(
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: isAdmin ? AppColors.roleAdminBg : AppColors.roleEmployeeBg,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    employee.role.value,
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: isAdmin ? AppColors.roleAdmin : AppColors.roleEmployee,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                                  ),
+                                StatusChip(
+                                  label: employee.role.value,
+                                  variant: isAdmin ? StatusVariant.info : StatusVariant.neutral,
+                                  icon: isAdmin ? Icons.shield_outlined : Icons.person_outline_rounded,
                                 ),
                                 const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: employee.isActive ? AppColors.successLight : AppColors.errorLight,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    employee.isActive ? 'Active' : 'Inactive',
-                                    style: AppTextStyles.labelSmall.copyWith(
-                                      color: employee.isActive ? AppColors.success : AppColors.error,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
+                                StatusChip(
+                                  label: employee.isActive ? 'ACTIVE' : 'INACTIVE',
+                                  variant: employee.isActive ? StatusVariant.success : StatusVariant.error,
+                                  icon: employee.isActive ? Icons.check_circle_outline_rounded : Icons.cancel_outlined,
                                 ),
                               ],
                             ),
@@ -440,8 +534,8 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                                 tooltip: employee.isActive ? 'Deactivate Employee' : 'Reactivate Employee',
                                 icon: Icon(
                                   employee.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
-                                  color: employee.isActive ? AppColors.success : AppColors.textMuted,
-                                  size: 36,
+                                  color: employee.isActive ? tokens.success : theme.colorScheme.onSurfaceVariant,
+                                  size: 34,
                                 ),
                                 onPressed: () => _confirmToggleStatus(employee),
                               ),
@@ -454,31 +548,53 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
               error: (err, _) => Center(
                 child: Padding(
                   padding: const EdgeInsets.all(24.0),
-                  child: Text('Error loading directory: $err', style: AppTextStyles.bodyMedium),
+                  child: Text(
+                    'Error loading directory: $err',
+                    style: TextStyle(color: tokens.danger),
+                  ),
                 ),
               ),
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddEmployeeDialog(context, orgId),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Employee'),
-      ),
     );
   }
 
-  Widget _filterChip(String label) {
+  Widget _buildFilterChip(String label) {
+    final theme = Theme.of(context);
     final isSelected = _selectedFilter == label;
-    return ChoiceChip(
-      label: Text(label),
-      selected: isSelected,
-      onSelected: (_) {
+    final isDark = theme.brightness == Brightness.dark;
+
+    return InkWell(
+      onTap: () {
         setState(() {
           _selectedFilter = label;
         });
       },
+      borderRadius: BorderRadius.circular(6),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? theme.colorScheme.primary
+              : (isDark ? const Color(0xFF0E1728) : const Color(0xFFF1F5F9)),
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(
+            color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outline,
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+            color: isSelected
+                ? Colors.white
+                : (isDark ? const Color(0xFFA6B6CB) : const Color(0xFF475569)),
+          ),
+        ),
+      ),
     );
   }
 }

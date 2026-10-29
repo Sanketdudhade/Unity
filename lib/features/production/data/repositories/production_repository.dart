@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:unity/core/constants/firestore_paths.dart';
 import 'package:unity/core/errors/app_exceptions.dart';
 import 'package:unity/features/processes/data/models/process_step_model.dart';
+import 'package:unity/features/processes/data/models/process_template_model.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
 import 'package:unity/features/production/data/models/process_update_model.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
@@ -39,31 +40,53 @@ class ProductionRepository {
   }
 
   /// Creates a production order and atomically snapshots template steps into the subcollection.
+  /// Supports assigning accountable employees to each stage individually.
   Future<String> createOrderWithSnapshottedTemplate({
     required String orgId,
     required ProductionOrder order,
     required List<ProcessStepModel> templateSteps,
     String? assignedEmployeeUid,
     String? assignedEmployeeName,
+    Map<int, ({String uid, String name})>? stageAssignmentsBySequence,
   }) async {
     try {
+      final effectiveSteps = templateSteps.isNotEmpty
+          ? templateSteps
+          : ProcessTemplateModel.default17Stages();
+
       final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc();
       final batch = firestore.batch();
 
       // Write parent order document
       batch.set(orderRef, {
         ...order.toMap(),
-        'totalProcesses': templateSteps.length,
+        'totalProcesses': effectiveSteps.length,
         'completedProcesses': 0,
       });
 
       // Snapshot each step into `productionOrders/{orderId}/processes/{processId}`
-      for (int i = 0; i < templateSteps.length; i++) {
-        final step = templateSteps[i];
+      for (int i = 0; i < effectiveSteps.length; i++) {
+        final step = effectiveSteps[i];
         final processRef = orderRef.collection('processes').doc();
 
         final isFirst = i == 0 || step.dependsOnStepSequence.isEmpty;
-        final isAssigned = isFirst && (assignedEmployeeUid != null && assignedEmployeeUid.isNotEmpty);
+        final stageAssignment = stageAssignmentsBySequence?[step.sequence];
+
+        final String stepEmpUid;
+        final String stepEmpName;
+
+        if (stageAssignment != null && stageAssignment.uid.isNotEmpty) {
+          stepEmpUid = stageAssignment.uid.trim();
+          stepEmpName = stageAssignment.name.trim();
+        } else if (isFirst && assignedEmployeeUid != null && assignedEmployeeUid.isNotEmpty) {
+          stepEmpUid = assignedEmployeeUid.trim();
+          stepEmpName = (assignedEmployeeName ?? 'Unassigned').trim();
+        } else {
+          stepEmpUid = '';
+          stepEmpName = 'Unassigned';
+        }
+
+        final isAssigned = stepEmpUid.isNotEmpty;
 
         final process = OrderProcessModel(
           id: processRef.id,
@@ -72,8 +95,8 @@ class ProductionRepository {
           name: step.name,
           sequence: step.sequence,
           dependsOnStepSequence: step.dependsOnStepSequence,
-          assignedEmployeeUid: isFirst ? (assignedEmployeeUid ?? '') : '',
-          assignedEmployeeName: isFirst ? (assignedEmployeeName ?? 'Unassigned') : 'Unassigned',
+          assignedEmployeeUid: stepEmpUid,
+          assignedEmployeeName: stepEmpName,
           targetQty: order.targetQuantity.toInt(),
           completedQty: 0,
           status: isAssigned ? 'ASSIGNED' : 'NOT_STARTED',
@@ -90,6 +113,65 @@ class ProductionRepository {
     }
   }
 
+  /// Snapshots stages for an existing order if it currently has none.
+  Future<void> initializeStagesForOrder({
+    required String orgId,
+    required String orderId,
+    List<ProcessStepModel>? steps,
+    Map<int, ({String uid, String name})>? stageAssignmentsBySequence,
+  }) async {
+    try {
+      final effectiveSteps = (steps != null && steps.isNotEmpty)
+          ? steps
+          : ProcessTemplateModel.default17Stages();
+
+      final processesCol = firestore.collection(FirestorePaths.orderProcessesCollection(orgId, orderId));
+      final existingSnap = await processesCol.limit(1).get();
+      if (existingSnap.docs.isNotEmpty) return; // Already initialized
+
+      final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc(orderId);
+      final orderSnap = await orderRef.get();
+      final orderData = orderSnap.data() ?? {};
+      final targetQuantity = (orderData['targetQuantity'] as num?)?.toInt() ?? 100;
+      final dueDate = (orderData['dueDate'] as Timestamp?)?.toDate();
+
+      final batch = firestore.batch();
+      for (int i = 0; i < effectiveSteps.length; i++) {
+        final step = effectiveSteps[i];
+        final processRef = processesCol.doc();
+        final stageAssignment = stageAssignmentsBySequence?[step.sequence];
+        final stepEmpUid = stageAssignment?.uid.trim() ?? '';
+        final stepEmpName = stageAssignment?.name.trim() ?? (stepEmpUid.isNotEmpty ? 'Assigned' : 'Unassigned');
+
+        final process = OrderProcessModel(
+          id: processRef.id,
+          orderId: orderId,
+          templateStepId: step.id,
+          name: step.name,
+          sequence: step.sequence,
+          dependsOnStepSequence: step.dependsOnStepSequence,
+          assignedEmployeeUid: stepEmpUid,
+          assignedEmployeeName: stepEmpName,
+          targetQty: targetQuantity,
+          completedQty: 0,
+          status: stepEmpUid.isNotEmpty ? 'ASSIGNED' : 'NOT_STARTED',
+          dueAt: dueDate,
+        );
+        batch.set(processRef, process.toMap());
+      }
+
+      batch.update(orderRef, {
+        'totalProcesses': effectiveSteps.length,
+        'completedProcesses': 0,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to initialize stages for order: ${e.message}', code: e.code);
+    }
+  }
+
   /// Reassigns an accountable employee to a process stage.
   Future<void> assignEmployeeToProcess({
     required String orgId,
@@ -102,13 +184,38 @@ class ProductionRepository {
       final docRef = firestore
           .collection(FirestorePaths.orderProcessesCollection(orgId, orderId))
           .doc(processId);
+      final orderRef = firestore
+          .collection(FirestorePaths.productionOrdersCollection(orgId))
+          .doc(orderId);
 
-      await docRef.update({
-        'assignedEmployeeUid': employeeUid,
-        'assignedEmployeeName': employeeName,
-        'status': 'ASSIGNED',
+      final currentDoc = await docRef.get();
+      final currentStatus = currentDoc.data()?['status'] as String? ?? 'NOT_STARTED';
+
+      final Map<String, dynamic> updates = {
+        'assignedEmployeeUid': employeeUid.trim(),
+        'assignedEmployeeName': employeeName.trim(),
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      if (employeeUid.trim().isEmpty) {
+        if (currentStatus == 'ASSIGNED') {
+          updates['status'] = 'NOT_STARTED';
+        }
+      } else {
+        if (currentStatus == 'NOT_STARTED') {
+          updates['status'] = 'ASSIGNED';
+        }
+      }
+
+      final batch = firestore.batch();
+      batch.update(docRef, updates);
+
+      // Touch parent order updatedAt to trigger real-time listeners across employee dashboards
+      batch.update(orderRef, {
         'updatedAt': FieldValue.serverTimestamp(),
       });
+
+      await batch.commit();
     } on FirebaseException catch (e) {
       throw DatabaseException('Failed to assign employee: ${e.message}', code: e.code);
     }
@@ -171,20 +278,24 @@ class ProductionRepository {
         updates['notes'] = notes;
       }
 
-      await processesCol.doc(processId).update(updates);
+      final batch = firestore.batch();
+      batch.update(processesCol.doc(processId), updates);
 
-      // Recompute completed processes counter on parent order
-      if (newStatus == 'COMPLETED') {
-        final newlyCompleted = allProcesses.where((p) => p.id == processId || p.isCompleted).length;
-        await firestore
-            .collection(FirestorePaths.productionOrdersCollection(orgId))
-            .doc(orderId)
-            .update({
-          'completedProcesses': newlyCompleted,
-          'status': newlyCompleted >= allProcesses.length ? 'completed' : 'in_production',
-          'updatedAt': FieldValue.serverTimestamp(),
-        });
+      // Recompute completed processes counter on parent order and touch parent updatedAt
+      final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc(orderId);
+      final newlyCompleted = allProcesses.where((p) => p.id == processId ? newStatus == 'COMPLETED' : (p.id != processId && p.isCompleted)).length;
+      final orderUpdates = <String, dynamic>{
+        'updatedAt': FieldValue.serverTimestamp(),
+        'completedProcesses': newlyCompleted,
+      };
+      if (newlyCompleted >= allProcesses.length && allProcesses.isNotEmpty) {
+        orderUpdates['status'] = 'completed';
+      } else if (newlyCompleted > 0 || newStatus == 'IN_PROGRESS') {
+        orderUpdates['status'] = 'in_production';
       }
+      batch.update(orderRef, orderUpdates);
+
+      await batch.commit();
     } on FirebaseException catch (e) {
       throw DatabaseException('Failed to update stage: ${e.message}', code: e.code);
     }
@@ -421,22 +532,39 @@ class ProductionRepository {
   }
 
   /// Real-time stream of all processes assigned to a specific employee across active orders.
-  Stream<List<OrderProcessModel>> getAssignedProcessesForEmployee(String orgId, String employeeUid) {
+  Stream<List<OrderProcessModel>> getAssignedProcessesForEmployee(
+    String orgId,
+    String employeeUid, [
+    String? employeeName,
+  ]) {
+    final cleanUid = employeeUid.trim();
+    final cleanName = (employeeName ?? '').trim();
+
     return firestore
         .collection(FirestorePaths.productionOrdersCollection(orgId))
-        .where('status', whereIn: ['in_production', 'scheduled'])
         .snapshots()
         .asyncMap((ordersSnap) async {
           final List<OrderProcessModel> assigned = [];
           for (final orderDoc in ordersSnap.docs) {
+            final orderData = orderDoc.data();
+            final orderStatus = (orderData['status'] as String? ?? '').toLowerCase();
+            if (orderStatus == 'completed') continue;
+
             final procSnap = await orderDoc.reference
                 .collection('processes')
-                .where('assignedEmployeeUid', isEqualTo: employeeUid)
                 .get();
 
             for (final pDoc in procSnap.docs) {
               final p = OrderProcessModel.fromFirestore(pDoc);
-              assigned.add(p.orderId.isNotEmpty ? p : p.copyWith(orderId: orderDoc.id));
+              final pUid = p.assignedEmployeeUid.trim();
+              final pName = p.assignedEmployeeName.trim().toLowerCase();
+
+              final isAssigned = (cleanUid.isNotEmpty && pUid == cleanUid) ||
+                  (cleanName.isNotEmpty && pName.isNotEmpty && pName == cleanName.toLowerCase());
+
+              if (isAssigned) {
+                assigned.add(p.orderId.isNotEmpty ? p : p.copyWith(orderId: orderDoc.id));
+              }
             }
           }
           assigned.sort((a, b) => a.sequence.compareTo(b.sequence));

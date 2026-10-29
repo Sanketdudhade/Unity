@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:unity/app/theme/app_colors.dart';
-import 'package:unity/app/theme/app_text_styles.dart';
+import 'package:unity/app/theme/admin_theme_extension.dart';
 import 'package:unity/core/utils/date_utils.dart';
 import 'package:unity/core/widgets/loading_widget.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/admin_page_header.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/empty_state.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/status_chip.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/inventory/data/models/stock_balance_model.dart';
 import 'package:unity/features/inventory/presentation/providers/inventory_providers.dart';
@@ -39,6 +41,9 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(() {
+      if (mounted) setState(() {});
+    });
   }
 
   @override
@@ -50,6 +55,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
 
   void _showQuickTransactionDialog(BuildContext context, StockBalanceModel balance, bool isReceipt) {
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final tokens = context.adminTokens;
     final user = ref.read(authStateProvider).user;
     final orgId = user?.organizationId;
     if (orgId == null || orgId.isEmpty) return;
@@ -61,53 +68,71 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text(isReceipt ? 'Receive Stock (GRN)' : 'Issue Material to Floor'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('${balance.materialName} (${balance.materialSku})', style: AppTextStyles.titleSmall),
-            const SizedBox(height: 4),
-            Text(
-              'Available Stock: ${balance.formattedAvailable} ${balance.unit}',
-              style: AppTextStyles.bodySmall.copyWith(
-                color: balance.availableQuantity > 0 ? AppColors.success : AppColors.error,
-                fontWeight: FontWeight.w600,
-              ),
+        backgroundColor: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.colorScheme.outline),
+        ),
+        title: Text(
+          isReceipt ? 'Receive Stock (GRN)' : 'Issue Material to Floor',
+          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface),
+        ),
+        content: SizedBox(
+          width: 420,
+          child: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${balance.materialName} (${balance.materialSku})',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: theme.colorScheme.onSurface),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Available Stock: ${balance.formattedAvailable} ${balance.unit}',
+                  style: TextStyle(
+                    color: balance.availableQuantity > 0 ? tokens.success : tokens.danger,
+                    fontWeight: FontWeight.w600,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: qtyController,
+                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Quantity (${balance.unit}) *',
+                    prefixIcon: Icon(isReceipt ? Icons.add_box_outlined : Icons.indeterminate_check_box_outlined),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: refController,
+                  decoration: InputDecoration(
+                    labelText: isReceipt ? 'Supplier PO / Invoice Ref' : 'Work Order # / Job Ref',
+                    prefixIcon: const Icon(Icons.tag_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: notesController,
+                  decoration: const InputDecoration(
+                    labelText: 'Reason / Department Notes',
+                    prefixIcon: Icon(Icons.notes_rounded),
+                  ),
+                ),
+              ],
             ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: qtyController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              autofocus: true,
-              decoration: InputDecoration(
-                labelText: 'Quantity (${balance.unit}) *',
-                prefixIcon: Icon(isReceipt ? Icons.add_box_outlined : Icons.indeterminate_check_box_outlined),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: refController,
-              decoration: InputDecoration(
-                labelText: isReceipt ? 'Supplier PO / Invoice Ref' : 'Work Order # / Job Ref',
-                prefixIcon: const Icon(Icons.tag_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'Reason / Department Notes',
-                prefixIcon: Icon(Icons.notes_rounded),
-              ),
-            ),
-          ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
           ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: isReceipt ? AppColors.success : AppColors.warning,
+              backgroundColor: isReceipt ? tokens.success : tokens.warning,
+              foregroundColor: Colors.white,
             ),
             onPressed: () async {
               final rawQty = double.tryParse(qtyController.text.trim());
@@ -143,7 +168,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                     content: Text(
                       '${isReceipt ? "Received" : "Issued"} $rawQty ${balance.unit} of ${balance.materialName}.',
                     ),
-                    backgroundColor: isReceipt ? AppColors.success : AppColors.secondary,
+                    backgroundColor: isReceipt ? tokens.success : theme.colorScheme.primary,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -151,7 +176,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                 messenger.showSnackBar(
                   SnackBar(
                     content: Text('Transaction failed: $e'),
-                    backgroundColor: AppColors.error,
+                    backgroundColor: tokens.danger,
                     behavior: SnackBarBehavior.floating,
                   ),
                 );
@@ -166,114 +191,152 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final tokens = context.adminTokens;
     final balancesAsync = ref.watch(stockBalancesStreamProvider);
     final lowStockAsync = ref.watch(lowStockBalancesStreamProvider);
     final lowStockCount = lowStockAsync.value?.length ?? 0;
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Inventory & Material Master'),
-        actions: [
-          IconButton(
-            tooltip: 'View Reorder Alerts',
-            icon: Badge(
-              isLabelVisible: lowStockCount > 0,
-              label: Text('$lowStockCount'),
-              child: const Icon(Icons.notifications_active_outlined),
-            ),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const LowStockScreen()),
-              );
-            },
-          ),
-          IconButton(
-            tooltip: 'Add Material Master',
-            icon: const Icon(Icons.add_box_rounded),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(builder: (_) => const AddMaterialScreen()),
-              );
-            },
-          ),
-        ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: [
-            const Tab(text: 'Materials & Stock'),
-            const Tab(text: 'Transaction Ledger'),
-            Tab(
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Low Stock'),
-                  if (lowStockCount > 0) ...[
-                    const SizedBox(width: 6),
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: AppColors.error,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: Text(
-                        '$lowStockCount',
-                        style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
-                      ),
-                    ),
-                  ],
-                ],
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          // 1. Page Header with Integrated TabBar
+          AdminPageHeader(
+            title: 'Inventory & Materials',
+            subtitle: 'Real-time stock balance ledger, material movement tracking, and safety thresholds',
+            icon: Icons.inventory_2_rounded,
+            trailing: ElevatedButton.icon(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const AddMaterialScreen()),
+                );
+              },
+              icon: const Icon(Icons.add_box_rounded, size: 18),
+              label: const Text('Add Material'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
               ),
             ),
-          ],
-        ),
-      ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          // 1. Materials & Stock Tab
-          _buildMaterialsListTab(balancesAsync),
+            bottom: TabBar(
+              controller: _tabController,
+              indicatorColor: theme.colorScheme.primary,
+              indicatorWeight: 2.5,
+              labelColor: theme.colorScheme.primary,
+              unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
+              labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+              unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500, fontSize: 13),
+              isScrollable: true,
+              tabAlignment: TabAlignment.start,
+              tabs: [
+                const Tab(text: 'Materials & Stock'),
+                const Tab(text: 'Transaction Ledger'),
+                Tab(
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Text('Low Stock Alerts'),
+                      if (lowStockCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: tokens.danger,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            '$lowStockCount',
+                            style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
 
-          // 2. Authoritative Transaction Ledger Tab
-          _buildLedgerTab(),
-
-          // 3. Low Stock Tab
-          const LowStockScreen(),
+          // 2. Tab Views
+          Expanded(
+            child: TabBarView(
+              controller: _tabController,
+              children: [
+                _buildMaterialsListTab(balancesAsync),
+                _buildLedgerTab(),
+                const LowStockScreen(isEmbedded: true),
+              ],
+            ),
+          ),
         ],
       ),
     );
   }
 
   Widget _buildMaterialsListTab(AsyncValue<List<StockBalanceModel>> balancesAsync) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tokens = context.adminTokens;
+
     return Column(
       children: [
         // Search & Category Filters
         Container(
-          padding: const EdgeInsets.all(16.0),
-          color: AppColors.surface,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          decoration: BoxDecoration(
+            color: isDark ? const Color(0xFF152235) : Colors.white,
+            border: Border(
+              bottom: BorderSide(
+                color: isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0),
+              ),
+            ),
+          ),
           child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              TextField(
-                controller: _searchController,
-                onChanged: (_) => setState(() {}),
-                decoration: InputDecoration(
-                  hintText: 'Search SKU, material name, or location...',
-                  prefixIcon: const Icon(Icons.search_rounded, size: 20),
-                  suffixIcon: _searchController.text.isNotEmpty
-                      ? IconButton(
-                          icon: const Icon(Icons.clear_rounded, size: 18),
-                          onPressed: () {
-                            _searchController.clear();
-                            setState(() {});
-                          },
-                        )
-                      : null,
-                  isDense: true,
+              SizedBox(
+                height: 40,
+                child: TextField(
+                  controller: _searchController,
+                  onChanged: (_) => setState(() {}),
+                  style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+                  decoration: InputDecoration(
+                    hintText: 'Search SKU, material name, or location...',
+                    hintStyle: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                    prefixIcon: Icon(Icons.search_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                    suffixIcon: _searchController.text.isNotEmpty
+                        ? IconButton(
+                            icon: const Icon(Icons.clear_rounded, size: 16),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {});
+                            },
+                          )
+                        : null,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    filled: true,
+                    fillColor: isDark ? const Color(0xFF0E1728) : const Color(0xFFF8FAFC),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: theme.colorScheme.outline),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: theme.colorScheme.outline),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: Row(
@@ -281,10 +344,31 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                     final isSelected = _selectedCategory == cat;
                     return Padding(
                       padding: const EdgeInsets.only(right: 8.0),
-                      child: ChoiceChip(
-                        label: Text(cat),
-                        selected: isSelected,
-                        onSelected: (_) => setState(() => _selectedCategory = cat),
+                      child: InkWell(
+                        onTap: () => setState(() => _selectedCategory = cat),
+                        borderRadius: BorderRadius.circular(6),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: isSelected
+                                ? theme.colorScheme.primary
+                                : (isDark ? const Color(0xFF0E1728) : const Color(0xFFF1F5F9)),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outline,
+                            ),
+                          ),
+                          child: Text(
+                            cat,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                              color: isSelected
+                                  ? Colors.white
+                                  : (isDark ? const Color(0xFFA6B6CB) : const Color(0xFF475569)),
+                            ),
+                          ),
+                        ),
                       ),
                     );
                   }).toList(),
@@ -299,193 +383,214 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
           child: balancesAsync.when(
             loading: () => const LoadingWidget(message: 'Loading inventory balances...'),
             error: (err, _) => Center(
-              child: Text('Failed to load inventory: $err', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+              child: Padding(
+                padding: const EdgeInsets.all(24.0),
+                child: Text('Failed to load inventory: $err', style: TextStyle(color: tokens.danger)),
+              ),
             ),
             data: (balances) {
               final query = _searchController.text.toLowerCase().trim();
               final filtered = balances.where((b) {
-                final matchesQuery = b.materialName.toLowerCase().contains(query) ||
+                final matchesQuery = query.isEmpty ||
+                    b.materialName.toLowerCase().contains(query) ||
                     b.materialSku.toLowerCase().contains(query) ||
                     b.locationName.toLowerCase().contains(query);
                 return matchesQuery;
               }).toList();
 
               if (filtered.isEmpty) {
-                return Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      const Icon(Icons.inventory_2_outlined, size: 64, color: AppColors.border),
-                      const SizedBox(height: 12),
-                      Text('No matching materials found', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
-                      const SizedBox(height: 6),
-                      TextButton.icon(
-                        icon: const Icon(Icons.add),
-                        label: const Text('Add Material Master'),
-                        onPressed: () {
-                          Navigator.push(
-                            context,
-                            MaterialPageRoute(builder: (_) => const AddMaterialScreen()),
-                          );
-                        },
-                      ),
-                    ],
+                return EmptyStateWidget(
+                  icon: Icons.inventory_2_outlined,
+                  title: 'No matching materials found',
+                  description: query.isNotEmpty
+                      ? 'No inventory materials match "$query".'
+                      : 'Inventory catalog is currently empty.',
+                  action: TextButton.icon(
+                    icon: const Icon(Icons.add),
+                    label: const Text('Add Material Master'),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (_) => const AddMaterialScreen()),
+                      );
+                    },
                   ),
                 );
               }
 
               return ListView.separated(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(20),
                 itemCount: filtered.length,
-                separatorBuilder: (_, _) => const SizedBox(height: 12),
+                separatorBuilder: (_, _) => const SizedBox(height: 10),
                 itemBuilder: (context, index) {
                   final b = filtered[index];
                   final isLow = b.isLowStock;
 
-                  return Card(
-                    elevation: 0,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      side: BorderSide(
-                        color: isLow ? AppColors.error.withValues(alpha: 0.6) : AppColors.border,
+                  return Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.surface,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(
+                        color: isLow ? tokens.danger.withValues(alpha: 0.6) : theme.colorScheme.outline,
                         width: isLow ? 1.5 : 1.0,
                       ),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                decoration: BoxDecoration(
-                                  color: AppColors.surfaceVariant,
-                                  borderRadius: BorderRadius.circular(6),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: tokens.primarySoft,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                b.materialSku,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: theme.colorScheme.primary,
+                                  fontFamily: 'monospace',
                                 ),
-                                child: Text(
-                                  b.materialSku,
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    fontWeight: FontWeight.w700,
-                                    fontFamily: 'monospace',
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            if (isLow)
+                              StatusChip(
+                                label: 'LOW STOCK',
+                                variant: StatusVariant.error,
+                                icon: Icons.warning_amber_rounded,
+                              ),
+                            const Spacer(),
+                            Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.location_on_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                                const SizedBox(width: 4),
+                                Text(
+                                  b.locationName,
+                                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          b.materialName,
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Available',
+                                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
                                   ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              if (isLow)
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: AppColors.errorLight,
-                                    borderRadius: BorderRadius.circular(4),
+                                  Text(
+                                    '${b.formattedAvailable} ${b.unit}',
+                                    style: TextStyle(
+                                      color: b.availableQuantity > 0 ? tokens.success : tokens.danger,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 14,
+                                    ),
                                   ),
-                                  child: Row(
-                                    children: [
-                                      const Icon(Icons.warning_amber_rounded, size: 12, color: AppColors.error),
-                                      const SizedBox(width: 2),
-                                      Text(
-                                        'LOW STOCK',
-                                        style: AppTextStyles.labelSmall.copyWith(
-                                          color: AppColors.error,
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 10,
-                                        ),
-                                      ),
-                                    ],
+                                ],
+                              ),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Total Current',
+                                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
                                   ),
-                                ),
-                              const Spacer(),
-                              Text(
-                                b.locationName,
-                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 8),
-                          Text(
-                            b.materialName,
-                            style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                          ),
-                          const SizedBox(height: 12),
-                          Row(
-                            children: [
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Available', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                                    Text(
-                                      '${b.formattedAvailable} ${b.unit}',
-                                      style: AppTextStyles.titleSmall.copyWith(
-                                        color: b.availableQuantity > 0 ? AppColors.success : AppColors.error,
-                                        fontWeight: FontWeight.w800,
-                                      ),
+                                  Text(
+                                    '${b.formattedCurrent} ${b.unit}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w700,
+                                      fontSize: 14,
+                                      color: theme.colorScheme.onSurface,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Total Current', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                                    Text(
-                                      '${b.formattedCurrent} ${b.unit}',
-                                      style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.w700),
+                            ),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    'Safety Min',
+                                    style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                                  ),
+                                  Text(
+                                    '${b.formattedMinimumStock} ${b.unit}',
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 14,
+                                      color: theme.colorScheme.onSurface,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Text('Safety Min', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                                    Text(
-                                      '${b.formattedMinimumStock} ${b.unit}',
-                                      style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.w600),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 24),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton.icon(
+                              icon: const Icon(Icons.history_rounded, size: 16),
+                              label: const Text('Ledger'),
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => StockHistoryScreen(
+                                      initialMaterialId: b.materialId,
+                                      materialName: b.materialName,
                                     ),
-                                  ],
-                                ),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(width: 8),
+                            OutlinedButton.icon(
+                              icon: const Icon(Icons.remove_circle_outline, size: 16),
+                              label: const Text('Issue'),
+                              style: OutlinedButton.styleFrom(
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
-                            ],
-                          ),
-                          const Divider(height: 24),
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              TextButton.icon(
-                                icon: const Icon(Icons.history_rounded, size: 16),
-                                label: const Text('Ledger'),
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (_) => StockHistoryScreen(
-                                        initialMaterialId: b.materialId,
-                                        materialName: b.materialName,
-                                      ),
-                                    ),
-                                  );
-                                },
+                              onPressed: () => _showQuickTransactionDialog(context, b, false),
+                            ),
+                            const SizedBox(width: 8),
+                            ElevatedButton.icon(
+                              icon: const Icon(Icons.add_circle_outline, size: 16),
+                              label: const Text('Receive'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: theme.colorScheme.primary,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
                               ),
-                              const SizedBox(width: 8),
-                              OutlinedButton.icon(
-                                icon: const Icon(Icons.remove_circle_outline, size: 16),
-                                label: const Text('Issue'),
-                                onPressed: () => _showQuickTransactionDialog(context, b, false),
-                              ),
-                              const SizedBox(width: 8),
-                              ElevatedButton.icon(
-                                icon: const Icon(Icons.add_circle_outline, size: 16),
-                                label: const Text('Receive'),
-                                onPressed: () => _showQuickTransactionDialog(context, b, true),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
+                              onPressed: () => _showQuickTransactionDialog(context, b, true),
+                            ),
+                          ],
+                        ),
+                      ],
                     ),
                   );
                 },
@@ -498,142 +603,149 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
   }
 
   Widget _buildLedgerTab() {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tokens = context.adminTokens;
     final transactionsAsync = ref.watch(stockTransactionsStreamProvider(null));
 
     return transactionsAsync.when(
       loading: () => const LoadingWidget(message: 'Loading ledger audit trail...'),
       error: (err, _) => Center(
-        child: Text('Failed to load ledger: $err', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: Text('Failed to load ledger: $err', style: TextStyle(color: tokens.danger)),
+        ),
       ),
       data: (txList) {
         if (txList.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Icon(Icons.receipt_long_rounded, size: 64, color: AppColors.border),
-                const SizedBox(height: 12),
-                Text('No transaction ledger records yet', style: AppTextStyles.titleMedium.copyWith(color: AppColors.textSecondary)),
-              ],
-            ),
+          return const EmptyStateWidget(
+            icon: Icons.receipt_long_rounded,
+            title: 'No transaction ledger records yet',
+            description: 'Material issues, receipts, and adjustments will appear here with cryptographic immutability.',
           );
         }
 
         return ListView.separated(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(20),
           itemCount: txList.length,
-          separatorBuilder: (_, _) => const SizedBox(height: 12),
+          separatorBuilder: (_, _) => const SizedBox(height: 10),
           itemBuilder: (context, index) {
             final tx = txList[index];
             final isPositive = tx.isPositiveDelta;
 
-            return Card(
-              elevation: 0,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-                side: BorderSide(color: AppColors.border),
+            return Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: theme.colorScheme.outline),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: isPositive
-                                ? AppColors.success.withValues(alpha: 0.15)
-                                : AppColors.error.withValues(alpha: 0.15),
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            tx.type,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: isPositive ? AppColors.success : AppColors.error,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          tx.createdAt != null
-                              ? FactoryDateUtils.formatFactoryDateTime(tx.createdAt!)
-                              : 'Recent',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 10),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(tx.materialName, style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.w700)),
-                              Text('SKU: ${tx.materialSku}', style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary)),
-                            ],
-                          ),
-                        ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      StatusChip(
+                        label: tx.type,
+                        variant: isPositive ? StatusVariant.success : StatusVariant.error,
+                        icon: isPositive ? Icons.arrow_downward_rounded : Icons.arrow_upward_rounded,
+                      ),
+                      const Spacer(),
+                      Text(
+                        tx.createdAt != null
+                            ? FactoryDateUtils.formatFactoryDateTime(tx.createdAt!)
+                            : 'Recent',
+                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              tx.formattedDelta,
-                              style: AppTextStyles.titleMedium.copyWith(
-                                color: isPositive ? AppColors.success : AppColors.error,
-                                fontWeight: FontWeight.w800,
+                              tx.materialName,
+                              style: TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w700,
+                                color: theme.colorScheme.onSurface,
                               ),
                             ),
                             Text(
-                              'Balance: ${tx.formattedBalanceAfter}',
-                              style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                              'SKU: ${tx.materialSku}',
+                              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                             ),
                           ],
                         ),
-                      ],
-                    ),
-                    if (tx.orderId != null && tx.orderId!.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.surfaceVariant,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: Text(
-                          'Order: ${tx.orderId}',
-                          style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
-                        ),
+                      ),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.end,
+                        children: [
+                          Text(
+                            tx.formattedDelta,
+                            style: TextStyle(
+                              color: isPositive ? tokens.success : tokens.danger,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 16,
+                            ),
+                          ),
+                          Text(
+                            'Balance: ${tx.formattedBalanceAfter}',
+                            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                          ),
+                        ],
                       ),
                     ],
-                    if (tx.notes.isNotEmpty) ...[
-                      const SizedBox(height: 8),
-                      Text(
-                        tx.notes,
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary, fontStyle: FontStyle.italic),
+                  ),
+                  if (tx.orderId != null && tx.orderId!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                        borderRadius: BorderRadius.circular(4),
                       ),
-                    ],
-                    const Divider(height: 20),
-                    Row(
-                      children: [
-                        const Icon(Icons.person_pin_circle_rounded, size: 14, color: AppColors.textSecondary),
-                        const SizedBox(width: 4),
-                        Text(
-                          'By ${tx.performedByName}',
-                          style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
-                        ),
-                        const Spacer(),
-                        Text(
-                          tx.transactionNumber,
-                          style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary, fontFamily: 'monospace'),
-                        ),
-                      ],
+                      child: Text(
+                        'Order: ${tx.orderId}',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                      ),
                     ),
                   ],
-                ),
+                  if (tx.notes.isNotEmpty) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      tx.notes,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: theme.colorScheme.onSurfaceVariant,
+                        fontStyle: FontStyle.italic,
+                      ),
+                    ),
+                  ],
+                  const Divider(height: 20),
+                  Row(
+                    children: [
+                      Icon(Icons.person_pin_circle_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                      const SizedBox(width: 4),
+                      Text(
+                        'By ${tx.performedByName}',
+                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      ),
+                      const Spacer(),
+                      Text(
+                        tx.transactionNumber,
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          fontFamily: 'monospace',
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
               ),
             );
           },

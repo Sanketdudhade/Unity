@@ -2,13 +2,21 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Helper functions enforcing trusted authentication and custom claims
+    // Helper functions enforcing trusted authentication, custom claims, and Firestore profile fallback
     function isAuthenticated() {
       return request.auth != null;
     }
 
     function isUser(uid) {
       return isAuthenticated() && request.auth.uid == uid;
+    }
+
+    function userDocExists() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
     function hasValidClaims() {
@@ -19,20 +27,35 @@ service cloud.firestore {
     }
 
     function isOrgMember(organizationId) {
-      return hasValidClaims() && request.auth.token.organizationId == organizationId;
+      return isAuthenticated() && (
+        (hasValidClaims() && request.auth.token.organizationId == organizationId) ||
+        (userDocExists() &&
+         getUserDoc().organizationId == organizationId &&
+         getUserDoc().role in ['ADMIN', 'EMPLOYEE'] &&
+         (getUserDoc().isActive == null || getUserDoc().isActive == true))
+      );
     }
 
     function isAdmin() {
-      return hasValidClaims() && request.auth.token.role == 'ADMIN';
+      return isAuthenticated() && (
+        (hasValidClaims() && request.auth.token.role == 'ADMIN') ||
+        (userDocExists() &&
+         getUserDoc().role == 'ADMIN' &&
+         (getUserDoc().isActive == null || getUserDoc().isActive == true))
+      );
+    }
+
+    function getCallerOrgId() {
+      return (request.auth.token.organizationId != null && request.auth.token.organizationId is string)
+        ? request.auth.token.organizationId
+        : (userDocExists() ? getUserDoc().organizationId : '');
     }
 
     // 1. Users collection: users/{uid}
-    // Users can read their own profile; Admins can read/query and create/update profiles in their organization.
+    // Authenticated users can read profile/directory records; authenticated admins/users can create/update.
     match /users/{userId} {
-      allow read: if isUser(userId) || (isAdmin() && resource.data.organizationId == request.auth.token.organizationId);
-      allow create: if isAdmin() && request.resource.data.organizationId == request.auth.token.organizationId;
-      allow update: if (isUser(userId) && request.resource.data.organizationId == resource.data.organizationId && request.resource.data.role == resource.data.role) ||
-                       (isAdmin() && resource.data.organizationId == request.auth.token.organizationId && request.resource.data.organizationId == resource.data.organizationId);
+      allow read: if isAuthenticated();
+      allow create, update: if isAuthenticated();
       allow delete: if false;
     }
 

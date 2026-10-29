@@ -9,7 +9,8 @@ import 'package:unity/features/inventory/presentation/providers/inventory_provid
 
 /// Screen listing materials below safety stock threshold with reorder actions.
 class LowStockScreen extends ConsumerWidget {
-  const LowStockScreen({super.key});
+  final bool isEmbedded;
+  const LowStockScreen({super.key, this.isEmbedded = false});
 
   void _showRestockDialog(BuildContext context, WidgetRef ref, StockBalanceModel balance) {
     final messenger = ScaffoldMessenger.of(context);
@@ -121,12 +122,7 @@ class LowStockScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final lowStockAsync = ref.watch(lowStockBalancesStreamProvider);
 
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Low Stock Alerts & Reorder'),
-      ),
-      body: lowStockAsync.when(
+    final content = lowStockAsync.when(
         loading: () => const LoadingWidget(message: 'Checking safety stock thresholds...'),
         error: (err, _) => Center(
           child: Text('Error: $err', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.error)),
@@ -251,7 +247,18 @@ class LowStockScreen extends ConsumerWidget {
             },
           );
         },
+      );
+
+    if (isEmbedded) {
+      return content;
+    }
+
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text('Low Stock Alerts & Reorder'),
       ),
+      body: content,
     );
   }
 }

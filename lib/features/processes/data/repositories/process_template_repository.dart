@@ -15,11 +15,36 @@ class ProcessTemplateRepository {
     return firestore
         .collection(FirestorePaths.processTemplatesCollection(orgId))
         .snapshots()
-        .map((snapshot) {
-      return snapshot.docs
-          .map((doc) => ProcessTemplateModel.fromFirestore(doc))
-          .toList()
-        ..sort((a, b) => b.version.compareTo(a.version));
+        .asyncMap((snapshot) async {
+      final List<ProcessTemplateModel> templates = [];
+      for (final doc in snapshot.docs) {
+        final stepsSnap = await firestore
+            .collection(FirestorePaths.processTemplateStepsCollection(orgId, doc.id))
+            .orderBy('sequence')
+            .get();
+
+        List<ProcessStepModel> steps = stepsSnap.docs
+            .map((sDoc) => ProcessStepModel.fromMap(sDoc.id, sDoc.data()))
+            .toList();
+
+        if (steps.isEmpty) {
+          steps = ProcessTemplateModel.default17Stages();
+        }
+
+        templates.add(ProcessTemplateModel.fromFirestore(doc, steps));
+      }
+
+      if (templates.isEmpty) {
+        templates.add(ProcessTemplateModel(
+          id: 'default_17_stages',
+          name: 'Unity Standard 17-Stage Workflow',
+          steps: ProcessTemplateModel.default17Stages(),
+          stagesCount: 17,
+        ));
+      }
+
+      templates.sort((a, b) => b.version.compareTo(a.version));
+      return templates;
     });
   }
 
@@ -85,7 +110,7 @@ class ProcessTemplateRepository {
       final defaultSteps = ProcessTemplateModel.default17Stages();
       const defaultTemplate = ProcessTemplateModel(
         id: '',
-        name: 'Standard 17-Stage Manufacturing Flow',
+        name: 'Unity Engineers Process Flow Chart Plan',
         version: 1,
         isActive: true,
         stagesCount: 17,

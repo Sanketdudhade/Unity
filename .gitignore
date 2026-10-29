@@ -58,4 +58,12 @@ serviceAccountKey.json
 *firebase-adminsdk*.json
 *adminsdk*.json
 
+# Local Python, IDE & Backups
+.venv/
+.vs/
+backups/
+/android/build/
+**/node_modules/
+
+
 

@@ -1,0 +1,12 @@
+{
+  "name": "unity-provisioning-scripts",
+  "version": "1.0.0",
+  "description": "Administrative scripts for provisioning initial users and custom claims",
+  "main": "provision_user.js",
+  "scripts": {
+    "provision": "node provision_user.js"
+  },
+  "dependencies": {
+    "firebase-admin": "^12.0.0"
+  }
+}

@@ -25,25 +25,24 @@ class SplashScreen extends ConsumerWidget {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                // Industrial Logo Icon
+                // App Logo Icon
                 Container(
-                  width: 80,
-                  height: 80,
+                  width: 84,
+                  height: 84,
                   decoration: BoxDecoration(
-                    color: AppColors.secondary,
                     borderRadius: BorderRadius.circular(20),
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.2),
-                        blurRadius: 16,
+                        color: Colors.black.withValues(alpha: 0.25),
+                        blurRadius: 18,
                         offset: const Offset(0, 8),
                       ),
                     ],
                   ),
-                  child: const Icon(
-                    Icons.precision_manufacturing_rounded,
-                    color: Colors.white,
-                    size: 44,
+                  clipBehavior: Clip.antiAlias,
+                  child: Image.asset(
+                    'assets/icons/app_icon.png',
+                    fit: BoxFit.cover,
                   ),
                 ),
                 const SizedBox(height: 24),
@@ -94,7 +93,9 @@ class SplashScreen extends ConsumerWidget {
                         ElevatedButton(
                           onPressed: () {
                             ref.read(authStateProvider.notifier).clearError();
-                            context.go(RouteNames.login);
+                            if (context.mounted) {
+                              context.go(RouteNames.login);
+                            }
                           },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: AppColors.error,

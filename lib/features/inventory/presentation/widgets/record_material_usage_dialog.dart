@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:unity/app/theme/app_colors.dart';
-import 'package:unity/app/theme/app_text_styles.dart';
+import 'package:unity/app/theme/admin_theme_extension.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/inventory/data/models/inventory_item_model.dart';
 import 'package:unity/features/inventory/presentation/providers/inventory_providers.dart';
 
 /// Modal dialog allowing shop-floor workers to log consumed raw materials with real-time stock deduction.
+/// Conforms to Section 5F & 7: Touch-friendly on Android mobile, responsive on Windows desktop, Dark/Light mode aware.
 class RecordMaterialUsageDialog extends ConsumerStatefulWidget {
   final String? initialWorkOrder;
 
@@ -52,6 +52,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
 
   Future<void> _submitDeduction() {
     final messenger = ScaffoldMessenger.of(context);
+    final tokens = context.adminTokens;
     if (!_formKey.currentState!.validate()) return Future.value();
 
     final user = ref.read(authStateProvider).user;
@@ -59,9 +60,9 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
 
     if (orgId == null || orgId.isEmpty) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Cannot log usage: Organization ID missing.'),
-          backgroundColor: AppColors.error,
+        SnackBar(
+          content: const Text('Cannot log usage: Organization ID missing.'),
+          backgroundColor: tokens.danger,
         ),
       );
       return Future.value();
@@ -69,9 +70,9 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
 
     if (_selectedItem == null) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Please select a material from the inventory list.'),
-          backgroundColor: AppColors.error,
+        SnackBar(
+          content: const Text('Please select a material from the inventory list.'),
+          backgroundColor: tokens.danger,
         ),
       );
       return Future.value();
@@ -80,9 +81,9 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
     final qty = double.tryParse(_qtyController.text.trim());
     if (qty == null || qty <= 0) {
       messenger.showSnackBar(
-        const SnackBar(
-          content: Text('Please enter a valid positive quantity.'),
-          backgroundColor: AppColors.error,
+        SnackBar(
+          content: const Text('Please enter a valid positive quantity.'),
+          backgroundColor: tokens.danger,
         ),
       );
       return Future.value();
@@ -102,7 +103,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
             content: Text(
               'Deducted $qty ${_selectedItem!.unit} of ${_selectedItem!.name}. Stock updated.',
             ),
-            backgroundColor: AppColors.secondary,
+            backgroundColor: tokens.success,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -113,7 +114,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
         messenger.showSnackBar(
           SnackBar(
             content: Text('Failed to deduct material: $err'),
-            backgroundColor: AppColors.error,
+            backgroundColor: tokens.danger,
             behavior: SnackBarBehavior.floating,
           ),
         );
@@ -123,55 +124,79 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tokens = context.adminTokens;
     final inventoryAsync = ref.watch(inventoryStreamProvider);
     final materials = inventoryAsync.value ?? [];
 
+    final textPrimary = isDark ? const Color(0xFFE8EEF7) : const Color(0xFF0F172A);
+    final textSecondary = isDark ? const Color(0xFFA6B6CB) : const Color(0xFF64748B);
+
     return AlertDialog(
+      backgroundColor: theme.colorScheme.surface,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: theme.colorScheme.outline),
+      ),
       title: Row(
         children: [
           Container(
             padding: const EdgeInsets.all(8),
             decoration: BoxDecoration(
-              color: AppColors.accent.withValues(alpha: 0.1),
+              color: const Color(0xFF0F766E).withValues(alpha: isDark ? 0.2 : 0.12),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: const Icon(Icons.inventory_rounded, color: AppColors.accent, size: 24),
+            child: const Icon(Icons.inventory_2_rounded, color: Color(0xFF0F766E), size: 22),
           ),
           const SizedBox(width: 12),
-          const Expanded(
-            child: Text('Record Material Usage', style: AppTextStyles.titleMedium),
+          Expanded(
+            child: Text(
+              'Record Material Usage',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w700,
+                color: textPrimary,
+              ),
+            ),
           ),
         ],
       ),
       content: SingleChildScrollView(
-        child: SizedBox(
-          width: 440,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
           child: Form(
             key: _formKey,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text('Select Material', style: AppTextStyles.labelMedium),
+                Text(
+                  'Select Raw Material / Component',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary),
+                ),
                 const SizedBox(height: 6),
                 if (materials.isEmpty)
                   Container(
                     padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
+                      color: isDark ? const Color(0xFF1E2B41) : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(8),
                     ),
-                    child: const Text('No materials found in inventory.', style: AppTextStyles.bodySmall),
+                    child: Text('No materials found in inventory.', style: TextStyle(fontSize: 12, color: textSecondary)),
                   )
                 else
                   DropdownButtonFormField<InventoryItem>(
                     initialValue: _selectedItem,
                     isExpanded: true,
-                    decoration: const InputDecoration(
-                      border: OutlineInputBorder(),
-                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                    decoration: InputDecoration(
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: isDark ? const Color(0xFF304155) : const Color(0xFFCBD5E1)),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                     ),
-                    hint: const Text('Choose raw material or component...'),
+                    hint: const Text('Choose inventory item...'),
                     items: materials.map((item) {
                       return DropdownMenuItem(
                         value: item,
@@ -182,14 +207,15 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                               child: Text(
                                 '[${item.sku}] ${item.name}',
                                 overflow: TextOverflow.ellipsis,
-                                style: AppTextStyles.bodyMedium,
+                                style: TextStyle(fontSize: 13, color: textPrimary),
                               ),
                             ),
                             Text(
                               '${item.quantity.toStringAsFixed(1)} ${item.unit}',
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: item.isLowStock ? AppColors.error : AppColors.secondary,
-                                fontWeight: FontWeight.w600,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: item.isLowStock ? tokens.danger : const Color(0xFF0F766E),
+                                fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
@@ -207,9 +233,9 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                   Container(
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: AppColors.surfaceVariant,
+                      color: isDark ? const Color(0xFF1E2B41) : const Color(0xFFF1F5F9),
                       borderRadius: BorderRadius.circular(8),
-                      border: Border.all(color: AppColors.border),
+                      border: Border.all(color: isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0)),
                     ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -217,11 +243,12 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text('Current On-Hand Balance', style: AppTextStyles.bodySmall),
+                            Text('Current On-Hand Balance', style: TextStyle(fontSize: 11, color: textSecondary)),
                             Text(
                               '${_selectedItem!.quantity.toStringAsFixed(2)} ${_selectedItem!.unit}',
-                              style: AppTextStyles.titleMedium.copyWith(
-                                color: _selectedItem!.isLowStock ? AppColors.error : AppColors.primary,
+                              style: TextStyle(
+                                fontSize: 15,
+                                color: _selectedItem!.isLowStock ? tokens.danger : const Color(0xFF0F766E),
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
@@ -230,13 +257,13 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                           decoration: BoxDecoration(
-                            color: AppColors.surface,
+                            color: theme.colorScheme.surface,
                             borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: AppColors.borderSubtle),
+                            border: Border.all(color: isDark ? const Color(0xFF304155) : const Color(0xFFCBD5E1)),
                           ),
                           child: Text(
                             'Loc: ${_selectedItem!.location}',
-                            style: AppTextStyles.labelSmall,
+                            style: TextStyle(fontSize: 11, color: textSecondary),
                           ),
                         ),
                       ],
@@ -245,7 +272,10 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                 ],
 
                 const SizedBox(height: 16),
-                const Text('Quantity Consumed', style: AppTextStyles.labelMedium),
+                Text(
+                  'Quantity Consumed',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary),
+                ),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _qtyController,
@@ -253,7 +283,10 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                   decoration: InputDecoration(
                     hintText: 'e.g. 5.0',
                     suffixText: _selectedItem?.unit ?? 'units',
-                    border: const OutlineInputBorder(),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: isDark ? const Color(0xFF304155) : const Color(0xFFCBD5E1)),
+                    ),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                   validator: (val) {
@@ -268,14 +301,20 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
                 ),
 
                 const SizedBox(height: 16),
-                const Text('Work Order / Batch Reference', style: AppTextStyles.labelMedium),
+                Text(
+                  'Work Order / Batch Reference',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: textSecondary),
+                ),
                 const SizedBox(height: 6),
                 TextFormField(
                   controller: _noteController,
-                  decoration: const InputDecoration(
+                  decoration: InputDecoration(
                     hintText: 'e.g. WO-2026-081 cutting stage',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                      borderSide: BorderSide(color: isDark ? const Color(0xFF304155) : const Color(0xFFCBD5E1)),
+                    ),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                   ),
                 ),
               ],
@@ -291,8 +330,8 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
         ElevatedButton(
           onPressed: _isSubmitting ? null : _submitDeduction,
           style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.accent,
-            foregroundColor: AppColors.textOnPrimary,
+            backgroundColor: const Color(0xFF0F766E),
+            foregroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
           ),
           child: _isSubmitting

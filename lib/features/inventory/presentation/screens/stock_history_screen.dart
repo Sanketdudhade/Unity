@@ -101,6 +101,12 @@ class _StockHistoryScreenState extends ConsumerState<StockHistoryScreen> {
                     child: ChoiceChip(
                       label: Text(type),
                       selected: isSelected,
+                      selectedColor: AppColors.primary,
+                      backgroundColor: AppColors.surface,
+                      labelStyle: TextStyle(
+                        color: isSelected ? Colors.white : AppColors.textPrimary,
+                        fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                      ),
                       onSelected: (_) => setState(() => _selectedType = type),
                     ),
                   );

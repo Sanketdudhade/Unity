@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/app/theme/app_colors.dart';
-import 'package:unity/app/theme/app_text_styles.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/process_queries/data/models/process_query_model.dart';
 import 'package:unity/features/process_queries/presentation/providers/query_providers.dart';
@@ -108,8 +107,11 @@ class _RaiseQueryScreenState extends ConsumerState<RaiseQueryScreen> {
     final ordersAsync = ref.watch(productionOrdersStreamProvider);
     final orders = ordersAsync.value ?? [];
 
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppColors.background,
+      backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppBar(
         title: const Text('Raise Shop-Floor Ticket'),
       ),
@@ -120,7 +122,14 @@ class _RaiseQueryScreenState extends ConsumerState<RaiseQueryScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('Ticket Information', style: AppTextStyles.titleMedium),
+              Text(
+                'Ticket Information',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: isDark ? const Color(0xFFE8EEF7) : const Color(0xFF0F172A),
+                ),
+              ),
               const SizedBox(height: 16),
               TextFormField(
                 controller: _titleController,

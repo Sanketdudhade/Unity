@@ -4,6 +4,7 @@ import 'package:unity/app/theme/app_colors.dart';
 import 'package:unity/app/theme/app_text_styles.dart';
 import 'package:unity/core/utils/date_utils.dart';
 import 'package:unity/core/widgets/loading_widget.dart';
+import 'package:unity/features/auth/data/models/app_user_model.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/employees/presentation/providers/employee_providers.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
@@ -70,20 +71,103 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
   Color _getStatusColor(String status) {
     switch (status.toUpperCase()) {
       case 'COMPLETED':
-        return AppColors.success;
+        return const Color(0xFF16A34A); // Done (Green)
       case 'IN_PROGRESS':
-        return AppColors.info;
       case 'PENDING_APPROVAL':
-        return AppColors.warning;
-      case 'ASSIGNED':
-        return AppColors.secondary;
+        return const Color(0xFFD97706); // Working (Amber)
       case 'BLOCKED':
       case 'REWORK_REQUIRED':
         return AppColors.error;
+      case 'ASSIGNED':
       case 'NOT_STARTED':
       default:
-        return AppColors.textMuted;
+        return const Color(0xFF64748B); // Pending (Slate)
     }
+  }
+
+  void _showChangeOperatorDialog(
+    BuildContext context,
+    String orgId,
+    List<AppUserModel> activeEmployees,
+  ) {
+    String? selectedUid = widget.process.assignedEmployeeUid.isNotEmpty ? widget.process.assignedEmployeeUid : null;
+    String selectedName = widget.process.assignedEmployeeName.isNotEmpty ? widget.process.assignedEmployeeName : 'Unassigned';
+
+    showDialog(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          title: const Text('Assign Stage Operator', style: AppTextStyles.titleMedium),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Select accountable employee for Step ${widget.process.sequence}: ${widget.process.name}',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              ),
+              const SizedBox(height: 14),
+              DropdownButtonFormField<String?>(
+                initialValue: selectedUid != null && activeEmployees.any((e) => e.uid == selectedUid) ? selectedUid : null,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Assigned Operator',
+                  border: OutlineInputBorder(),
+                  prefixIcon: Icon(Icons.person_pin_rounded),
+                ),
+                hint: const Text('Unassigned', overflow: TextOverflow.ellipsis),
+                items: [
+                  const DropdownMenuItem<String?>(value: null, child: Text('Unassigned', overflow: TextOverflow.ellipsis)),
+                  ...activeEmployees.map(
+                    (e) => DropdownMenuItem<String?>(
+                      value: e.uid,
+                      child: Text('${e.fullName} (${e.role.value})', overflow: TextOverflow.ellipsis),
+                    ),
+                  ),
+                ],
+                onChanged: (uid) {
+                  setDialogState(() {
+                    selectedUid = uid;
+                    if (uid != null) {
+                      selectedName = activeEmployees.firstWhere((e) => e.uid == uid).fullName;
+                    } else {
+                      selectedName = 'Unassigned';
+                    }
+                  });
+                },
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                Navigator.pop(ctx);
+                await ref.read(productionRepositoryProvider).assignEmployeeToProcess(
+                      orgId: orgId,
+                      orderId: _effectiveOrderId,
+                      processId: widget.process.id,
+                      employeeUid: selectedUid ?? '',
+                      employeeName: selectedName,
+                    );
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Stage operator updated to $selectedName!'),
+                      backgroundColor: AppColors.secondary,
+                    ),
+                  );
+                }
+              },
+              child: const Text('Confirm'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
@@ -91,10 +175,26 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
     final user = ref.watch(authStateProvider).user;
     final orgId = user?.organizationId ?? '';
     final isAdmin = user?.role.isAdmin ?? false;
-    final isAssignedToMe = user?.uid == widget.process.assignedEmployeeUid;
-    final canPerformActions = isAdmin || isAssignedToMe;
 
-    final isUnlocked = widget.process.isUnlocked(widget.allStageStatuses);
+    final currentUid = user?.uid.trim() ?? '';
+    final assignedUid = widget.process.assignedEmployeeUid.trim();
+    final currentName = (user?.fullName ?? '').trim().toLowerCase();
+    final assignedName = widget.process.assignedEmployeeName.trim().toLowerCase();
+
+    final isAssignedToMe = (currentUid.isNotEmpty && currentUid == assignedUid) ||
+        (currentName.isNotEmpty && assignedName.isNotEmpty && currentName == assignedName);
+    final canPerformActions = isAdmin || isAssignedToMe || assignedUid.isEmpty;
+
+    // Real-time sibling stage status lookup from Firestore so prerequisite checks never fail falsely
+    final allProcessesAsync = ref.watch(orderProcessesStreamProvider(_effectiveOrderId));
+    final Map<int, String> resolvedStatuses = Map.from(widget.allStageStatuses);
+    if (allProcessesAsync.hasValue && allProcessesAsync.value != null) {
+      for (final p in allProcessesAsync.value!) {
+        resolvedStatuses[p.sequence] = p.status;
+      }
+    }
+
+    final isUnlocked = widget.process.isUnlocked(resolvedStatuses);
     final statusColor = _getStatusColor(widget.process.status);
     final updatesAsync = ref.watch(processUpdatesStreamProvider((
       orderId: _effectiveOrderId,
@@ -153,8 +253,8 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
           ),
         ],
       ),
-      content: SizedBox(
-        width: 520,
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
         child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -262,9 +362,40 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(
-                          'Assigned: ${widget.process.assignedEmployeeName.isNotEmpty ? widget.process.assignedEmployeeName : "Unassigned"}',
-                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                        Consumer(
+                          builder: (context, ref, _) {
+                            final employeesAsync = ref.watch(employeesStreamProvider);
+                            final employees = employeesAsync.value ?? [];
+                            final activeEmployees = employees.where((e) => e.isActive).toList();
+
+                            if (!isAdmin) {
+                              return Text(
+                                'Assigned: ${widget.process.assignedEmployeeName.isNotEmpty ? widget.process.assignedEmployeeName : "Unassigned"}',
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                              );
+                            }
+
+                            return InkWell(
+                              borderRadius: BorderRadius.circular(4),
+                              onTap: () => _showChangeOperatorDialog(context, orgId, activeEmployees),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  const Icon(Icons.person_pin_rounded, size: 14, color: AppColors.primary),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    'Operator: ${widget.process.assignedEmployeeName.isNotEmpty ? widget.process.assignedEmployeeName : "Unassigned"}',
+                                    style: AppTextStyles.bodySmall.copyWith(
+                                      color: AppColors.primary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  const Icon(Icons.edit_outlined, size: 12, color: AppColors.primary),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                         if (widget.process.dueAt != null)
                           Text(
@@ -278,17 +409,112 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
               ),
               const SizedBox(height: 16),
 
-              // Operator Action Buttons
-              if (canPerformActions) ...[
-                Text('Station Actions', style: AppTextStyles.titleSmall),
-                const SizedBox(height: 8),
+              // Station Actions Section
+              Text('Station Actions', style: AppTextStyles.titleSmall),
+              const SizedBox(height: 8),
+
+              if (!canPerformActions) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.surfaceVariant.withValues(alpha: 0.5),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: AppColors.border),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.lock_outline_rounded, color: AppColors.textSecondary, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Station actions are reserved for the assigned operator (${widget.process.assignedEmployeeName.isNotEmpty ? widget.process.assignedEmployeeName : "Unassigned"}) or administrators.',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ] else ...[
+                // Informational Status Banners for finished or waiting stages
+                if (widget.process.isCompleted) ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.successLight.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.3)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.check_circle_rounded, color: AppColors.success, size: 22),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Stage Operations Completed',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.success,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'All work and quality checks for this stage are signed off and verified.',
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ] else if (widget.process.status == 'PENDING_APPROVAL') ...[
+                  Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.warningLight.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.warning.withValues(alpha: 0.4)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.hourglass_top_rounded, color: AppColors.warning, size: 20),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Awaiting Supervisor Approval',
+                                style: AppTextStyles.labelMedium.copyWith(
+                                  color: AppColors.warning,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                              const SizedBox(height: 2),
+                              Text(
+                                'Stage has been submitted for review. Awaiting quality sign-off to unlock the next manufacturing stage.',
+                                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textPrimary),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
 
                 Wrap(
                   spacing: 8,
                   runSpacing: 8,
                   children: [
                     // 1. Start Stage Button
-                    if (widget.process.isNotStarted || widget.process.status == 'ASSIGNED')
+                    if (widget.process.isNotStarted || widget.process.status == 'ASSIGNED') ...[
                       ElevatedButton.icon(
                         onPressed: (!isUnlocked || _isSaving)
                             ? null
@@ -300,8 +526,18 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                           foregroundColor: Colors.white,
                         ),
                       ),
+                      if (isAdmin && isUnlocked)
+                        OutlinedButton.icon(
+                          onPressed: _isSaving ? null : () => _handleAdminApprove(orgId, user!),
+                          icon: const Icon(Icons.verified_rounded, size: 18),
+                          label: const Text('Direct Sign-off'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.success,
+                          ),
+                        ),
+                    ],
 
-                    // 2. Log Output Button
+                    // 2. Active Stage Buttons (IN_PROGRESS or REWORK_REQUIRED)
                     if (widget.process.isInProgress || widget.process.status == 'REWORK_REQUIRED') ...[
                       ElevatedButton.icon(
                         onPressed: _isSaving
@@ -311,14 +547,12 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                                   _showBlockerForm = false;
                                 }),
                         icon: const Icon(Icons.add_task_rounded, size: 18),
-                        label: const Text('Log Output (+Qty)'),
+                        label: Text(_showLogOutputForm ? 'Hide Log Form' : 'Log Output (+Qty)'),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppColors.primary,
                           foregroundColor: Colors.white,
                         ),
                       ),
-
-                      // 3. Report Blocker / Pause Button
                       OutlinedButton.icon(
                         onPressed: _isSaving
                             ? null
@@ -327,13 +561,11 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                                   _showLogOutputForm = false;
                                 }),
                         icon: const Icon(Icons.pause_circle_outline_rounded, size: 18),
-                        label: const Text('Report Blocker'),
+                        label: Text(_showBlockerForm ? 'Hide Form' : 'Report Blocker'),
                         style: OutlinedButton.styleFrom(
                           foregroundColor: AppColors.error,
                         ),
                       ),
-
-                      // 4. Submit for Approval Button
                       ElevatedButton.icon(
                         onPressed: _isSaving ? null : () => _handleSubmitForApproval(),
                         icon: const Icon(Icons.send_rounded, size: 16),
@@ -343,6 +575,97 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                           foregroundColor: Colors.white,
                         ),
                       ),
+                      if (isAdmin)
+                        ElevatedButton.icon(
+                          onPressed: _isSaving ? null : () => _handleAdminApprove(orgId, user!),
+                          icon: const Icon(Icons.verified_rounded, size: 18),
+                          label: const Text('Direct Sign-off'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                    ],
+
+                    // 3. Pending Approval Actions
+                    if (widget.process.status == 'PENDING_APPROVAL') ...[
+                      ElevatedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => setState(() {
+                                  _showLogOutputForm = !_showLogOutputForm;
+                                  _showBlockerForm = false;
+                                }),
+                        icon: const Icon(Icons.add_comment_outlined, size: 18),
+                        label: Text(_showLogOutputForm ? 'Hide Form' : 'Add Note / Remark'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      OutlinedButton.icon(
+                        onPressed: _isSaving ? null : () => _handleTransitionStatus('IN_PROGRESS'),
+                        icon: const Icon(Icons.undo_rounded, size: 18),
+                        label: const Text('Return to In Progress'),
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: AppColors.textSecondary,
+                        ),
+                      ),
+                      if (isAdmin) ...[
+                        ElevatedButton.icon(
+                          onPressed: _isSaving ? null : () => _handleAdminApprove(orgId, user!),
+                          icon: const Icon(Icons.check_circle_rounded, size: 18),
+                          label: const Text('Approve Stage'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.success,
+                            foregroundColor: Colors.white,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _isSaving ? null : () => _showRejectDialog(orgId, user!),
+                          icon: const Icon(Icons.cancel_outlined, size: 18),
+                          label: const Text('Request Rework'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                          ),
+                        ),
+                      ],
+                    ],
+
+                    // 4. Completed Stage Actions
+                    if (widget.process.isCompleted) ...[
+                      ElevatedButton.icon(
+                        onPressed: _isSaving
+                            ? null
+                            : () => setState(() {
+                                  _showLogOutputForm = !_showLogOutputForm;
+                                  _showBlockerForm = false;
+                                }),
+                        icon: const Icon(Icons.note_add_outlined, size: 18),
+                        label: Text(_showLogOutputForm ? 'Hide Form' : 'Log Output / Note'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: Colors.white,
+                        ),
+                      ),
+                      if (isAdmin) ...[
+                        OutlinedButton.icon(
+                          onPressed: _isSaving ? null : _confirmReopenStage,
+                          icon: const Icon(Icons.replay_rounded, size: 18),
+                          label: const Text('Reopen Stage'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.warning,
+                          ),
+                        ),
+                        OutlinedButton.icon(
+                          onPressed: _isSaving ? null : () => _showRejectDialog(orgId, user!),
+                          icon: const Icon(Icons.assignment_return_outlined, size: 18),
+                          label: const Text('Request Rework'),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.error,
+                          ),
+                        ),
+                      ],
                     ],
 
                     // 5. Resume from Blocked
@@ -372,7 +695,10 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Log Daily Output', style: AppTextStyles.titleSmall),
+                        Text(
+                          widget.process.isCompleted ? 'Log Audit Entry / Remarks' : 'Log Daily Output',
+                          style: AppTextStyles.titleSmall,
+                        ),
                         const SizedBox(height: 10),
                         Row(
                           children: [
@@ -429,7 +755,7 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                               ),
                               child: _isSaving
                                   ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
-                                  : const Text('Save Output Entry'),
+                                  : Text(widget.process.isCompleted ? 'Save Audit Entry' : 'Save Output Entry'),
                             ),
                           ],
                         ),
@@ -494,6 +820,30 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                 Text('Supervisor / Quality Sign-off', style: AppTextStyles.titleSmall),
                 const SizedBox(height: 8),
 
+                if (widget.process.isCompleted) ...[
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    margin: const EdgeInsets.only(bottom: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.successLight.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.success.withValues(alpha: 0.25)),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.verified_user_rounded, color: AppColors.success, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            'Quality sign-off verified. Stage marked complete and approved.',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.success, fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+
                 if (widget.process.status == 'PENDING_APPROVAL') ...[
                   Container(
                     padding: const EdgeInsets.all(10),
@@ -550,6 +900,8 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                   orderId: _effectiveOrderId,
                   processId: widget.process.id,
                   currentAssignedUid: widget.process.assignedEmployeeUid,
+                  currentAssignedName: widget.process.assignedEmployeeName,
+                  isAdmin: isAdmin,
                 ),
                 const SizedBox(height: 16),
               ],
@@ -575,87 +927,90 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                     );
                   }
 
-                  return ListView.separated(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    itemCount: updates.length,
-                    separatorBuilder: (ctx, i) => const SizedBox(height: 8),
-                    itemBuilder: (ctx, i) {
-                      final u = updates[i];
-                      final isRework = u.hasBlocker;
+                  return Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      for (int i = 0; i < updates.length; i++) ...[
+                        if (i > 0) const SizedBox(height: 8),
+                        () {
+                          final u = updates[i];
+                          final isRework = u.hasBlocker;
 
-                      return Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: isRework ? AppColors.errorLight.withValues(alpha: 0.15) : AppColors.surface,
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(
-                            color: isRework ? AppColors.error.withValues(alpha: 0.3) : AppColors.border,
-                          ),
-                        ),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                          return Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: isRework ? AppColors.errorLight.withValues(alpha: 0.15) : AppColors.surface,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(
+                                color: isRework ? AppColors.error.withValues(alpha: 0.3) : AppColors.border,
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Icon(
-                                      isRework ? Icons.warning_amber_rounded : Icons.verified_rounded,
-                                      size: 16,
-                                      color: isRework ? AppColors.error : AppColors.secondary,
+                                    Row(
+                                      children: [
+                                        Icon(
+                                          isRework ? Icons.warning_amber_rounded : Icons.verified_rounded,
+                                          size: 16,
+                                          color: isRework ? AppColors.error : AppColors.secondary,
+                                        ),
+                                        const SizedBox(width: 6),
+                                        Text(
+                                          u.actorName,
+                                          style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700),
+                                        ),
+                                      ],
                                     ),
-                                    const SizedBox(width: 6),
-                                    Text(
-                                      u.actorName,
-                                      style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700),
-                                    ),
+                                    if (u.deltaCompletedQty > 0)
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.successLight,
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: Text(
+                                          '+${u.deltaCompletedQty} ${widget.order.unit}',
+                                          style: AppTextStyles.labelSmall.copyWith(
+                                            color: AppColors.success,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                        ),
+                                      ),
                                   ],
                                 ),
-                                if (u.deltaCompletedQty > 0)
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AppColors.successLight,
-                                      borderRadius: BorderRadius.circular(4),
-                                    ),
-                                    child: Text(
-                                      '+${u.deltaCompletedQty} ${widget.order.unit}',
-                                      style: AppTextStyles.labelSmall.copyWith(
-                                        color: AppColors.success,
-                                        fontWeight: FontWeight.w700,
+                                if (u.notes.isNotEmpty) ...[
+                                  const SizedBox(height: 4),
+                                  Text(u.notes, style: AppTextStyles.bodySmall),
+                                ],
+                                const SizedBox(height: 4),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    if (u.hoursSpent != null && u.hoursSpent! > 0)
+                                      Text(
+                                        'Hours: ${u.hoursSpent} hrs',
+                                        style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                                      )
+                                    else
+                                      const SizedBox.shrink(),
+                                    if (u.createdAt != null)
+                                      Text(
+                                        FactoryDateUtils.formatFactoryDate(u.createdAt!),
+                                        style: AppTextStyles.labelSmall.copyWith(color: AppColors.textMuted),
                                       ),
-                                    ),
-                                  ),
+                                  ],
+                                ),
                               ],
                             ),
-                            if (u.notes.isNotEmpty) ...[
-                              const SizedBox(height: 4),
-                              Text(u.notes, style: AppTextStyles.bodySmall),
-                            ],
-                            const SizedBox(height: 4),
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                if (u.hoursSpent != null && u.hoursSpent! > 0)
-                                  Text(
-                                    'Hours: ${u.hoursSpent} hrs',
-                                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
-                                  )
-                                else
-                                  const SizedBox.shrink(),
-                                if (u.createdAt != null)
-                                  Text(
-                                    FactoryDateUtils.formatFactoryDate(u.createdAt!),
-                                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textMuted),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ),
-                      );
-                    },
+                          );
+                        }(),
+                      ],
+                    ],
                   );
                 },
               ),
@@ -834,6 +1189,33 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
     }
   }
 
+  Future<void> _confirmReopenStage() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Reopen Stage'),
+        content: Text(
+          'Reopen Step ${widget.process.sequence}: "${widget.process.name}"?\n\nThis will reset the stage to IN_PROGRESS so further work, units, or remarks can be logged.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.warning),
+            child: const Text('Reopen to In Progress'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      await _handleTransitionStatus('IN_PROGRESS');
+    }
+  }
+
   Future<void> _handleAdminApprove(String orgId, dynamic user) async {
     final messenger = ScaffoldMessenger.of(context);
     setState(() => _isSaving = true);
@@ -940,12 +1322,16 @@ class _EmployeeAssignRow extends ConsumerWidget {
   final String orderId;
   final String processId;
   final String currentAssignedUid;
+  final String currentAssignedName;
+  final bool isAdmin;
 
   const _EmployeeAssignRow({
     required this.orgId,
     required this.orderId,
     required this.processId,
     required this.currentAssignedUid,
+    required this.currentAssignedName,
+    required this.isAdmin,
   });
 
   @override
@@ -953,33 +1339,85 @@ class _EmployeeAssignRow extends ConsumerWidget {
     final employeesAsync = ref.watch(employeesStreamProvider);
     final messenger = ScaffoldMessenger.of(context);
 
+    if (!isAdmin) {
+      return Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.badge_outlined, size: 18, color: AppColors.primary),
+            const SizedBox(width: 8),
+            Text(
+              'Assigned Operator: ',
+              style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+            ),
+            Expanded(
+              child: Text(
+                currentAssignedName.isNotEmpty
+                    ? currentAssignedName
+                    : (currentAssignedUid.isNotEmpty ? currentAssignedUid : 'Unassigned (Shop-Floor Team)'),
+                style: AppTextStyles.labelSmall.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: currentAssignedName.isNotEmpty ? AppColors.textPrimary : AppColors.textMuted,
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
     return employeesAsync.when(
       loading: () => const SizedBox.shrink(),
       error: (e, stack) => const SizedBox.shrink(),
       data: (employees) {
         final activeEmployees = employees.where((e) => e.isActive).toList();
 
-        return Row(
-          children: [
-            const Icon(Icons.person_outline_rounded, size: 18, color: AppColors.textSecondary),
-            const SizedBox(width: 8),
-            Expanded(
-              child: DropdownButtonFormField<String>(
+        return Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFF8FAFC),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.person_add_alt_1_rounded, size: 16, color: AppColors.primary),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Stage Operator Assignment (Admin Control)',
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: AppColors.textPrimary,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              DropdownButtonFormField<String>(
                 initialValue: currentAssignedUid.isNotEmpty &&
                         activeEmployees.any((e) => e.uid == currentAssignedUid)
                     ? currentAssignedUid
-                    : null,
+                    : '',
+                isExpanded: true,
                 decoration: const InputDecoration(
-                  labelText: 'Assign Station Operator',
+                  labelText: 'Accountable Technician / Operator',
                   isDense: true,
                   border: OutlineInputBorder(),
+                  contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 10),
                 ),
-                hint: const Text('Unassigned'),
                 items: [
-                  const DropdownMenuItem(value: '', child: Text('Unassigned')),
+                  const DropdownMenuItem(value: '', child: Text('Unassigned (Shop-Floor Team)', overflow: TextOverflow.ellipsis)),
                   ...activeEmployees.map((e) => DropdownMenuItem(
                         value: e.uid,
-                        child: Text('${e.fullName} (${e.email})'),
+                        child: Text('${e.fullName} (${e.role.value})', overflow: TextOverflow.ellipsis),
                       )),
                 ],
                 onChanged: (val) async {
@@ -995,7 +1433,11 @@ class _EmployeeAssignRow extends ConsumerWidget {
                         );
                     messenger.showSnackBar(
                       SnackBar(
-                        content: Text('Assigned to ${emp?.fullName ?? "Unassigned"}'),
+                        content: Text(
+                          val.isNotEmpty
+                              ? 'Assigned Stage to ${emp?.fullName ?? "Operator"}'
+                              : 'Stage marked as Unassigned',
+                        ),
                         backgroundColor: AppColors.secondary,
                         behavior: SnackBarBehavior.floating,
                       ),
@@ -1007,8 +1449,8 @@ class _EmployeeAssignRow extends ConsumerWidget {
                   }
                 },
               ),
-            ),
-          ],
+            ],
+          ),
         );
       },
     );

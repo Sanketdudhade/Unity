@@ -81,21 +81,28 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         // App Brand Header
                         Center(
                           child: Container(
-                            padding: const EdgeInsets.all(12),
+                            width: 68,
+                            height: 68,
                             decoration: BoxDecoration(
-                              color: AppColors.primary,
-                              borderRadius: BorderRadius.circular(12),
+                              borderRadius: BorderRadius.circular(16),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 12,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
                             ),
-                            child: const Icon(
-                              Icons.precision_manufacturing_rounded,
-                              color: Colors.white,
-                              size: 32,
+                            clipBehavior: Clip.antiAlias,
+                            child: Image.asset(
+                              'assets/icons/app_icon.png',
+                              fit: BoxFit.cover,
                             ),
                           ),
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          'System Access',
+                          'Unity Technologies',
                           textAlign: TextAlign.center,
                           style: AppTextStyles.headlineSmall,
                         ),

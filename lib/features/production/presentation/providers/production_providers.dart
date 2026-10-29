@@ -80,6 +80,6 @@ final employeeAssignedProcessesStreamProvider = StreamProvider<List<OrderProcess
   }
 
   final repository = ref.watch(productionRepositoryProvider);
-  return repository.getAssignedProcessesForEmployee(orgId, uid);
+  return repository.getAssignedProcessesForEmployee(orgId, uid, user?.fullName);
 });
 

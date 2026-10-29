@@ -78,24 +78,24 @@ class ProcessTemplateModel {
     );
   }
 
-  /// Default 17-stage reference manufacturing workflow
+  /// Default 17-stage reference manufacturing workflow from Unity Engineers Process Flow Chart Plan
   static List<ProcessStepModel> default17Stages() {
     return const [
       ProcessStepModel(id: 'step_1', sequence: 1, name: 'RFQ received', defaultDurationHours: 4, dependsOnStepSequence: []),
       ProcessStepModel(id: 'step_2', sequence: 2, name: 'Feasibility study', defaultDurationHours: 8, dependsOnStepSequence: [1]),
       ProcessStepModel(id: 'step_3', sequence: 3, name: 'Quotation', defaultDurationHours: 4, dependsOnStepSequence: [2]),
-      ProcessStepModel(id: 'step_4', sequence: 4, name: 'Customer purchase order', defaultDurationHours: 4, dependsOnStepSequence: [3]),
-      ProcessStepModel(id: 'step_5', sequence: 5, name: 'Concept drawing/design', defaultDurationHours: 16, dependsOnStepSequence: [4]),
-      ProcessStepModel(id: 'step_6', sequence: 6, name: '3D design/modeling', defaultDurationHours: 24, dependsOnStepSequence: [5]),
-      ProcessStepModel(id: 'step_7', sequence: 7, name: 'BOM release', defaultDurationHours: 8, dependsOnStepSequence: [6]),
-      ProcessStepModel(id: 'step_8', sequence: 8, name: 'Material procurement', defaultDurationHours: 48, dependsOnStepSequence: [7]),
-      ProcessStepModel(id: 'step_9', sequence: 9, name: 'Detailed drawing release', defaultDurationHours: 16, dependsOnStepSequence: [8]),
-      ProcessStepModel(id: 'step_10', sequence: 10, name: 'Optional Stage (Pre-machining QA)', defaultDurationHours: 8, isOptional: true, dependsOnStepSequence: [9]),
-      ProcessStepModel(id: 'step_11', sequence: 11, name: '3D precision machining', defaultDurationHours: 32, dependsOnStepSequence: [9]),
-      ProcessStepModel(id: 'step_12', sequence: 12, name: 'Heat treatment', defaultDurationHours: 24, dependsOnStepSequence: [11]),
-      ProcessStepModel(id: 'step_13', sequence: 13, name: '2D precision machining', defaultDurationHours: 16, dependsOnStepSequence: [12]),
-      ProcessStepModel(id: 'step_14', sequence: 14, name: 'Assembly', defaultDurationHours: 16, dependsOnStepSequence: [13]),
-      ProcessStepModel(id: 'step_15', sequence: 15, name: 'Trial', defaultDurationHours: 8, dependsOnStepSequence: [14]),
+      ProcessStepModel(id: 'step_4', sequence: 4, name: 'PURCHASE ORDER', defaultDurationHours: 8, dependsOnStepSequence: [3]),
+      ProcessStepModel(id: 'step_5', sequence: 5, name: 'CONCEPT DWG DESIGN', defaultDurationHours: 16, dependsOnStepSequence: [4]),
+      ProcessStepModel(id: 'step_6', sequence: 6, name: 'DESIGNING 3D MODELING', defaultDurationHours: 24, dependsOnStepSequence: [5]),
+      ProcessStepModel(id: 'step_7', sequence: 7, name: 'BOM RELEASE', defaultDurationHours: 8, dependsOnStepSequence: [6]),
+      ProcessStepModel(id: 'step_8', sequence: 8, name: 'MATERIAL PROCUREMENT', defaultDurationHours: 48, dependsOnStepSequence: [7]),
+      ProcessStepModel(id: 'step_9', sequence: 9, name: 'DETAIL DWG RELEASE', defaultDurationHours: 16, dependsOnStepSequence: [8]),
+      ProcessStepModel(id: 'step_10', sequence: 10, name: 'ROUGH MACHINING', defaultDurationHours: 24, isOptional: false, dependsOnStepSequence: [9]),
+      ProcessStepModel(id: 'step_11', sequence: 11, name: '3D PRECISION MACHINING', defaultDurationHours: 32, dependsOnStepSequence: [10]),
+      ProcessStepModel(id: 'step_12', sequence: 12, name: 'HEAT TREATMENT', defaultDurationHours: 24, dependsOnStepSequence: [11]),
+      ProcessStepModel(id: 'step_13', sequence: 13, name: '2D PRECISION MACHINING', defaultDurationHours: 16, dependsOnStepSequence: [12]),
+      ProcessStepModel(id: 'step_14', sequence: 14, name: 'ASSEMBLY', defaultDurationHours: 16, dependsOnStepSequence: [13]),
+      ProcessStepModel(id: 'step_15', sequence: 15, name: 'TRAIL', defaultDurationHours: 8, dependsOnStepSequence: [14]),
       ProcessStepModel(id: 'step_16', sequence: 16, name: 'Inspection', defaultDurationHours: 8, dependsOnStepSequence: [15]),
       ProcessStepModel(id: 'step_17', sequence: 17, name: 'Dispatch', defaultDurationHours: 4, dependsOnStepSequence: [16]),
     ];

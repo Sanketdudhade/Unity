@@ -10,12 +10,12 @@ import 'package:unity/features/auth/presentation/screens/splash_screen.dart';
 import 'package:unity/features/employee_dashboard/presentation/screens/employee_dashboard_screen.dart';
 import 'package:unity/features/employees/presentation/screens/employee_list_screen.dart';
 import 'package:unity/features/inventory/presentation/screens/inventory_screen.dart';
-import 'package:unity/features/processes/presentation/screens/process_list_screen.dart';
 import 'package:unity/features/process_queries/presentation/screens/query_list_screen.dart';
 import 'package:unity/features/production/presentation/screens/production_list_screen.dart';
 import 'package:unity/features/products/presentation/screens/product_list_screen.dart';
 import 'package:unity/features/profile/presentation/screens/profile_screen.dart';
 import 'package:unity/features/reports/presentation/screens/reports_screen.dart';
+import 'package:unity/features/admin_dashboard/presentation/shell/admin_shell.dart';
 
 /// Listenable bridge allowing GoRouter to respond reactively to Riverpod auth state updates.
 class RouterNotifier extends ChangeNotifier {
@@ -102,45 +102,50 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (context, state) => const LoginScreen(),
       ),
       GoRoute(
-        path: RouteNames.adminDashboard,
-        builder: (context, state) => const AdminDashboardScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminEmployees,
-        builder: (context, state) => const EmployeeListScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminProducts,
-        builder: (context, state) => const ProductListScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminInventory,
-        builder: (context, state) => const InventoryScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminProduction,
-        builder: (context, state) => const ProductionListScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminProcesses,
-        builder: (context, state) => const ProcessListScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminQueries,
-        builder: (context, state) => const QueryListScreen(),
-      ),
-      GoRoute(
-        path: RouteNames.adminReports,
-        builder: (context, state) => const ReportsScreen(),
-      ),
-      GoRoute(
         path: RouteNames.employeeDashboard,
-
         builder: (context, state) => const EmployeeDashboardScreen(),
       ),
-      GoRoute(
-        path: RouteNames.profile,
-        builder: (context, state) => const ProfileScreen(),
+      ShellRoute(
+        builder: (context, state, child) {
+          return AdminShell(
+            currentPath: state.matchedLocation,
+            child: child,
+          );
+        },
+        routes: [
+          GoRoute(
+            path: RouteNames.adminDashboard,
+            builder: (context, state) => const AdminDashboardScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminEmployees,
+            builder: (context, state) => const EmployeeListScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminProducts,
+            builder: (context, state) => const ProductListScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminInventory,
+            builder: (context, state) => const InventoryScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminProduction,
+            builder: (context, state) => const ProductionListScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminQueries,
+            builder: (context, state) => const QueryListScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminReports,
+            builder: (context, state) => const ReportsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.profile,
+            builder: (context, state) => const ProfileScreen(),
+          ),
+        ],
       ),
     ],
   );

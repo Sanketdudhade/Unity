@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:unity/app/theme/app_colors.dart';
-import 'package:unity/app/theme/app_text_styles.dart';
+import 'package:go_router/go_router.dart';
+import 'package:unity/app/router/route_names.dart';
+import 'package:unity/app/theme/admin_theme_extension.dart';
 import 'package:unity/core/widgets/loading_widget.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/admin_page_header.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/empty_state.dart';
+import 'package:unity/features/admin_dashboard/presentation/widgets/status_chip.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/products/data/models/product_model.dart';
 import 'package:unity/features/products/presentation/providers/product_providers.dart';
@@ -26,6 +30,9 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
 
   void _showAddEditProductDialog(BuildContext context, String orgId, [ProductModel? existing]) {
     final messenger = ScaffoldMessenger.of(context);
+    final theme = Theme.of(context);
+    final tokens = context.adminTokens;
+    final router = GoRouter.of(context);
     final formKey = GlobalKey<FormState>();
 
     final codeController = TextEditingController(text: existing?.partCode ?? '');
@@ -42,27 +49,39 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
       barrierDismissible: false,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: theme.colorScheme.surface,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+            side: BorderSide(color: theme.colorScheme.outline),
+          ),
           title: Row(
             children: [
               Container(
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
-                  color: AppColors.secondary.withValues(alpha: 0.1),
+                  color: tokens.primarySoft,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(
                   existing == null ? Icons.add_box_rounded : Icons.edit_note_rounded,
-                  color: AppColors.secondary,
-                  size: 22,
+                  color: theme.colorScheme.primary,
+                  size: 20,
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(existing == null ? 'Add Product Master' : 'Edit Product Master', style: AppTextStyles.titleMedium),
+              const SizedBox(width: 12),
+              Text(
+                existing == null ? 'Add Product Master' : 'Edit Product Master',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
             ],
           ),
-          content: SingleChildScrollView(
-            child: SizedBox(
-              width: 440,
+          content: SizedBox(
+            width: 440,
+            child: SingleChildScrollView(
               child: Form(
                 key: formKey,
                 child: Column(
@@ -73,7 +92,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Part Code / SKU *',
                         hintText: 'e.g. PRD-BRACKET-01',
-                        border: OutlineInputBorder(),
                       ),
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Part code is required' : null,
                     ),
@@ -83,7 +101,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Product / Part Name *',
                         hintText: 'e.g. Stainless Steel Mounting Bracket',
-                        border: OutlineInputBorder(),
                       ),
                       validator: (v) => (v == null || v.trim().isEmpty) ? 'Name is required' : null,
                     ),
@@ -97,7 +114,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Drawing Number',
                               hintText: 'e.g. DWG-2026-A10',
-                              border: OutlineInputBorder(),
                             ),
                           ),
                         ),
@@ -108,7 +124,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                             controller: revController,
                             decoration: const InputDecoration(
                               labelText: 'Revision',
-                              border: OutlineInputBorder(),
                             ),
                           ),
                         ),
@@ -123,7 +138,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                             controller: unitController,
                             decoration: const InputDecoration(
                               labelText: 'Unit',
-                              border: OutlineInputBorder(),
                             ),
                           ),
                         ),
@@ -135,7 +149,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                             decoration: const InputDecoration(
                               labelText: 'Customer Reference',
                               hintText: 'e.g. AeroTech Systems',
-                              border: OutlineInputBorder(),
                             ),
                           ),
                         ),
@@ -148,7 +161,6 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                       decoration: const InputDecoration(
                         labelText: 'Description / Specifications',
                         hintText: 'e.g. 316L Sheet 2mm, tolerance ISO 2768-m',
-                        border: OutlineInputBorder(),
                       ),
                     ),
                   ],
@@ -189,28 +201,40 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
 
                         if (ctx.mounted) {
                           Navigator.pop(ctx);
+                          messenger.clearSnackBars();
                           messenger.showSnackBar(
                             SnackBar(
-                              content: Text('Product ${prod.partCode} saved successfully!'),
-                              backgroundColor: AppColors.secondary,
+                              duration: const Duration(seconds: 3),
+                              content: Text('Product ${prod.partCode} saved! Live in Production catalog.'),
+                              backgroundColor: tokens.success,
                               behavior: SnackBarBehavior.floating,
+                              action: SnackBarAction(
+                                label: 'Go to Production',
+                                textColor: Colors.white,
+                                onPressed: () {
+                                  messenger.hideCurrentSnackBar();
+                                  router.push(RouteNames.adminProduction);
+                                },
+                              ),
                             ),
                           );
                         }
                       } catch (e) {
                         setDialogState(() => isSaving = false);
+                        messenger.clearSnackBars();
                         messenger.showSnackBar(
                           SnackBar(
+                            duration: const Duration(seconds: 3),
                             content: Text('Failed: $e'),
-                            backgroundColor: AppColors.error,
+                            backgroundColor: tokens.danger,
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
                       }
                     },
               style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: AppColors.textOnPrimary,
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
               ),
               child: isSaving
                   ? const SizedBox(
@@ -228,302 +252,421 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tokens = context.adminTokens;
     final user = ref.watch(authStateProvider).user;
     final orgId = user?.organizationId ?? '';
     final productsAsync = ref.watch(productsStreamProvider);
 
     return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: const Text('Product Master & Parts'),
-      ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () => _showAddEditProductDialog(context, orgId),
-        icon: const Icon(Icons.add_rounded),
-        label: const Text('Add Part'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: productsAsync.when(
-        loading: () => const LoadingWidget(message: 'Loading product catalog...'),
-        error: (err, _) => Center(
-          child: Text('Error loading products: $err', style: AppTextStyles.bodyMedium),
-        ),
-        data: (products) {
-          final query = _searchController.text.trim().toLowerCase();
-          final filtered = products.where((p) {
-            final matchesFilter = _selectedFilter == 'All' ||
-                (_selectedFilter == 'Active' && p.isActive) ||
-                (_selectedFilter == 'Inactive' && !p.isActive);
+      backgroundColor: theme.scaffoldBackgroundColor,
+      body: Column(
+        children: [
+          // 1. Page Header
+          AdminPageHeader(
+            title: 'Product Master & Parts',
+            subtitle: 'Central catalog of manufactured parts, engineering drawings, and specifications',
+            icon: Icons.precision_manufacturing_rounded,
+            trailing: ElevatedButton.icon(
+              onPressed: () => _showAddEditProductDialog(context, orgId),
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Add Part'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: theme.colorScheme.primary,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+            ),
+          ),
 
-            final matchesQuery = query.isEmpty ||
-                p.partCode.toLowerCase().contains(query) ||
-                p.name.toLowerCase().contains(query) ||
-                p.drawingNumber.toLowerCase().contains(query) ||
-                p.customerReference.toLowerCase().contains(query);
-
-            return matchesFilter && matchesQuery;
-          }).toList();
-
-          final activeCount = products.where((p) => p.isActive).length;
-          final inactiveCount = products.where((p) => !p.isActive).length;
-
-          return RefreshIndicator(
-            onRefresh: () async {
-              ref.invalidate(productsStreamProvider);
-            },
-            child: ListView(
-              padding: const EdgeInsets.all(16),
-              children: [
-                Row(
-                  children: [
-                    _MiniProductCard(
-                      label: 'Total Parts',
-                      count: products.length,
-                      color: AppColors.secondary,
-                      icon: Icons.precision_manufacturing_rounded,
-                    ),
-                    const SizedBox(width: 8),
-                    _MiniProductCard(
-                      label: 'Active',
-                      count: activeCount,
-                      color: AppColors.success,
-                      icon: Icons.check_circle_rounded,
-                    ),
-                    const SizedBox(width: 8),
-                    _MiniProductCard(
-                      label: 'Inactive',
-                      count: inactiveCount,
-                      color: AppColors.textMuted,
-                      icon: Icons.pause_circle_outline_rounded,
-                    ),
-                  ],
+          // 2. Metrics & Toolbar
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF152235) : Colors.white,
+              border: Border(
+                bottom: BorderSide(
+                  color: isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0),
                 ),
-                const SizedBox(height: 16),
+              ),
+            ),
+            child: productsAsync.maybeWhen(
+              data: (products) {
+                final activeCount = products.where((p) => p.isActive).length;
+                final inactiveCount = products.where((p) => !p.isActive).length;
 
-                // Search Bar
-                TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    hintText: 'Search by Part Code, Name, Drawing, or Customer...',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: _searchController.text.isNotEmpty
-                        ? IconButton(
-                            icon: const Icon(Icons.clear_rounded),
-                            onPressed: () {
-                              _searchController.clear();
-                              setState(() {});
-                            },
-                          )
-                        : null,
-                    filled: true,
-                    fillColor: AppColors.surface,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(10),
-                      borderSide: const BorderSide(color: AppColors.border),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                  ),
-                  onChanged: (_) => setState(() {}),
-                ),
-                const SizedBox(height: 12),
+                return LayoutBuilder(
+                  builder: (context, constraints) {
+                    final isWide = constraints.maxWidth >= 760;
 
-                // Filter Chips
-                Row(
-                  children: ['All', 'Active', 'Inactive'].map((filter) {
-                    final isSelected = _selectedFilter == filter;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: FilterChip(
-                        selected: isSelected,
-                        label: Text(filter),
-                        selectedColor: AppColors.primaryLight,
-                        labelStyle: AppTextStyles.labelSmall.copyWith(
-                          color: isSelected ? Colors.white : AppColors.textPrimary,
-                          fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
-                        ),
-                        onSelected: (_) => setState(() => _selectedFilter = filter),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                const SizedBox(height: 16),
-
-                if (filtered.isEmpty)
-                  Container(
-                    padding: const EdgeInsets.all(32),
-                    alignment: Alignment.center,
-                    child: Column(
+                    final metricCards = Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        Icon(Icons.category_outlined, size: 48, color: AppColors.textMuted),
-                        const SizedBox(height: 12),
-                        Text(
-                          products.isEmpty
-                              ? 'No products in catalog yet.\nTap "Add Part" to register a manufactured component.'
-                              : 'No products match your filter criteria.',
-                          textAlign: TextAlign.center,
-                          style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary),
+                        _MiniProductBadge(
+                          label: 'Total Parts',
+                          count: products.length,
+                          color: theme.colorScheme.primary,
+                          icon: Icons.category_rounded,
+                        ),
+                        const SizedBox(width: 8),
+                        _MiniProductBadge(
+                          label: 'Active',
+                          count: activeCount,
+                          color: tokens.success,
+                          icon: Icons.check_circle_rounded,
+                        ),
+                        const SizedBox(width: 8),
+                        _MiniProductBadge(
+                          label: 'Inactive',
+                          count: inactiveCount,
+                          color: theme.colorScheme.onSurfaceVariant,
+                          icon: Icons.pause_circle_outline_rounded,
                         ),
                       ],
-                    ),
-                  )
-                else
-                  ...filtered.map((prod) {
-                    return Container(
-                      margin: const EdgeInsets.only(bottom: 12),
-                      padding: const EdgeInsets.all(16),
-                      decoration: BoxDecoration(
-                        color: AppColors.surface,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.border),
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withValues(alpha: 0.03),
-                            blurRadius: 6,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                      ),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: AppColors.primary,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  prod.partCode,
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w700,
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: AppColors.secondary.withValues(alpha: 0.12),
-                                  borderRadius: BorderRadius.circular(4),
-                                ),
-                                child: Text(
-                                  prod.revision,
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: AppColors.secondaryDark,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                              const Spacer(),
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                decoration: BoxDecoration(
-                                  color: prod.isActive ? AppColors.successLight : AppColors.surfaceVariant,
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  prod.isActive ? 'ACTIVE' : 'INACTIVE',
-                                  style: AppTextStyles.labelSmall.copyWith(
-                                    color: prod.isActive ? AppColors.success : AppColors.textMuted,
-                                    fontWeight: FontWeight.w700,
-                                    fontSize: 10,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                          const SizedBox(height: 10),
-                          Text(prod.name, style: AppTextStyles.titleMedium),
-                          if (prod.description.isNotEmpty) ...[
-                            const SizedBox(height: 4),
-                            Text(
-                              prod.description,
-                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                            ),
-                          ],
-                          const SizedBox(height: 10),
+                    );
 
-                          Row(
-                            children: [
-                              if (prod.drawingNumber.isNotEmpty) ...[
-                                const Icon(Icons.architecture_rounded, size: 14, color: AppColors.textMuted),
-                                const SizedBox(width: 4),
-                                Text('Dwg: ${prod.drawingNumber}', style: AppTextStyles.labelSmall),
-                                const SizedBox(width: 14),
-                              ],
-                              if (prod.customerReference.isNotEmpty) ...[
-                                const Icon(Icons.business_rounded, size: 14, color: AppColors.textMuted),
-                                const SizedBox(width: 4),
-                                Text(prod.customerReference, style: AppTextStyles.labelSmall),
-                                const SizedBox(width: 14),
-                              ],
-                              const Icon(Icons.straighten_rounded, size: 14, color: AppColors.textMuted),
-                              const SizedBox(width: 4),
-                              Text('Unit: ${prod.unit}', style: AppTextStyles.labelSmall),
-                            ],
+                    final searchField = SizedBox(
+                      width: isWide ? 300 : double.infinity,
+                      height: 38,
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (_) => setState(() {}),
+                        style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+                        decoration: InputDecoration(
+                          hintText: 'Search code, name, drawing...',
+                          hintStyle: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                          prefixIcon: Icon(Icons.search_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear_rounded, size: 16),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    setState(() {});
+                                  },
+                                )
+                              : null,
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                          filled: true,
+                          fillColor: isDark ? const Color(0xFF0E1728) : const Color(0xFFF8FAFC),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: theme.colorScheme.outline),
                           ),
-                          const SizedBox(height: 12),
-
-                          Row(
-                            mainAxisAlignment: MainAxisAlignment.end,
-                            children: [
-                              OutlinedButton.icon(
-                                onPressed: () => _showAddEditProductDialog(context, orgId, prod),
-                                icon: const Icon(Icons.edit_outlined, size: 14),
-                                label: const Text('Edit'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  textStyle: AppTextStyles.labelSmall,
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              OutlinedButton.icon(
-                                onPressed: () async {
-                                  await ref.read(productRepositoryProvider).toggleProductStatus(
-                                    orgId,
-                                    prod.id,
-                                    !prod.isActive,
-                                  );
-                                },
-                                icon: Icon(
-                                  prod.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
-                                  size: 16,
-                                  color: prod.isActive ? AppColors.success : AppColors.textMuted,
-                                ),
-                                label: Text(prod.isActive ? 'Active' : 'Inactive'),
-                                style: OutlinedButton.styleFrom(
-                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                  textStyle: AppTextStyles.labelSmall,
-                                ),
-                              ),
-                            ],
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: theme.colorScheme.outline),
                           ),
-                        ],
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: theme.colorScheme.primary, width: 1.5),
+                          ),
+                        ),
                       ),
                     );
-                  }),
-                const SizedBox(height: 60),
-              ],
+
+                    final filterRow = Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: ['All', 'Active', 'Inactive'].map((filter) {
+                        final isSelected = _selectedFilter == filter;
+                        return Padding(
+                          padding: const EdgeInsets.only(right: 6),
+                          child: InkWell(
+                            onTap: () => setState(() => _selectedFilter = filter),
+                            borderRadius: BorderRadius.circular(6),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                              decoration: BoxDecoration(
+                                color: isSelected
+                                    ? theme.colorScheme.primary
+                                    : (isDark ? const Color(0xFF0E1728) : const Color(0xFFF1F5F9)),
+                                borderRadius: BorderRadius.circular(6),
+                                border: Border.all(
+                                  color: isSelected ? theme.colorScheme.primary : theme.colorScheme.outline,
+                                ),
+                              ),
+                              child: Text(
+                                filter,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+                                  color: isSelected
+                                      ? Colors.white
+                                      : (isDark ? const Color(0xFFA6B6CB) : const Color(0xFF475569)),
+                                ),
+                              ),
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    );
+
+                    if (isWide) {
+                      return Row(
+                        children: [
+                          metricCards,
+                          const Spacer(),
+                          searchField,
+                          const SizedBox(width: 10),
+                          filterRow,
+                        ],
+                      );
+                    } else {
+                      return Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: metricCards,
+                          ),
+                          const SizedBox(height: 10),
+                          searchField,
+                          const SizedBox(height: 8),
+                          filterRow,
+                        ],
+                      );
+                    }
+                  },
+                );
+              },
+              orElse: () => const SizedBox.shrink(),
             ),
-          );
-        },
+          ),
+
+          // 3. Product Catalog List
+          Expanded(
+            child: productsAsync.when(
+              loading: () => const LoadingWidget(message: 'Loading product catalog...'),
+              error: (err, _) => Center(
+                child: Padding(
+                  padding: const EdgeInsets.all(24.0),
+                  child: Text('Error loading products: $err', style: TextStyle(color: tokens.danger)),
+                ),
+              ),
+              data: (products) {
+                final query = _searchController.text.trim().toLowerCase();
+                final filtered = products.where((p) {
+                  final matchesFilter = _selectedFilter == 'All' ||
+                      (_selectedFilter == 'Active' && p.isActive) ||
+                      (_selectedFilter == 'Inactive' && !p.isActive);
+
+                  final matchesQuery = query.isEmpty ||
+                      p.partCode.toLowerCase().contains(query) ||
+                      p.name.toLowerCase().contains(query) ||
+                      p.drawingNumber.toLowerCase().contains(query) ||
+                      p.customerReference.toLowerCase().contains(query);
+
+                  return matchesFilter && matchesQuery;
+                }).toList();
+
+                if (filtered.isEmpty) {
+                  return EmptyStateWidget(
+                    icon: Icons.category_outlined,
+                    title: products.isEmpty ? 'No products in catalog yet' : 'No matching products',
+                    description: products.isEmpty
+                        ? 'Tap "Add Part" to register your first manufactured component.'
+                        : 'No parts match your filter criteria "$query".',
+                  );
+                }
+
+                return RefreshIndicator(
+                  onRefresh: () async => ref.invalidate(productsStreamProvider),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.all(20),
+                    itemCount: filtered.length,
+                    separatorBuilder: (_, _) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final prod = filtered[index];
+
+                      return Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surface,
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: theme.colorScheme.outline),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                  decoration: BoxDecoration(
+                                    color: tokens.primarySoft,
+                                    borderRadius: BorderRadius.circular(6),
+                                  ),
+                                  child: Text(
+                                    prod.partCode,
+                                    style: TextStyle(
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                      color: theme.colorScheme.primary,
+                                      fontFamily: 'monospace',
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                  child: Text(
+                                    prod.revision,
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w600,
+                                      color: theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                                const Spacer(),
+                                StatusChip(
+                                  label: prod.isActive ? 'ACTIVE' : 'INACTIVE',
+                                  variant: prod.isActive ? StatusVariant.success : StatusVariant.neutral,
+                                  icon: prod.isActive ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded,
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 8),
+                            Text(
+                              prod.name,
+                              style: TextStyle(
+                                fontSize: 15,
+                                fontWeight: FontWeight.w600,
+                                color: theme.colorScheme.onSurface,
+                              ),
+                            ),
+                            if (prod.description.isNotEmpty) ...[
+                              const SizedBox(height: 4),
+                              Text(
+                                prod.description,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: theme.colorScheme.onSurfaceVariant,
+                                ),
+                              ),
+                            ],
+                            const SizedBox(height: 10),
+
+                            Wrap(
+                              spacing: 16,
+                              runSpacing: 6,
+                              children: [
+                                if (prod.drawingNumber.isNotEmpty)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.architecture_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        'Dwg: ${prod.drawingNumber}',
+                                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                                      ),
+                                    ],
+                                  ),
+                                if (prod.customerReference.isNotEmpty)
+                                  Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(Icons.business_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        prod.customerReference,
+                                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                                      ),
+                                    ],
+                                  ),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(Icons.straighten_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      'Unit: ${prod.unit}',
+                                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                                    ),
+                                  ],
+                                ),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.end,
+                              children: [
+                                ElevatedButton.icon(
+                                  onPressed: () => context.push(RouteNames.adminProduction),
+                                  icon: const Icon(Icons.precision_manufacturing_rounded, size: 14),
+                                  label: const Text('Produce / Order'),
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: theme.colorScheme.primary,
+                                    foregroundColor: Colors.white,
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: () => _showAddEditProductDialog(context, orgId, prod),
+                                  icon: const Icon(Icons.edit_outlined, size: 14),
+                                  label: const Text('Edit'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                OutlinedButton.icon(
+                                  onPressed: () async {
+                                    await ref.read(productRepositoryProvider).toggleProductStatus(
+                                          orgId,
+                                          prod.id,
+                                          !prod.isActive,
+                                        );
+                                  },
+                                  icon: Icon(
+                                    prod.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
+                                    size: 16,
+                                    color: prod.isActive ? tokens.success : theme.colorScheme.onSurfaceVariant,
+                                  ),
+                                  label: Text(prod.isActive ? 'Active' : 'Inactive'),
+                                  style: OutlinedButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
+                );
+              },
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _MiniProductCard extends StatelessWidget {
+class _MiniProductBadge extends StatelessWidget {
   final String label;
   final int count;
   final Color color;
   final IconData icon;
 
-  const _MiniProductCard({
+  const _MiniProductBadge({
     required this.label,
     required this.count,
     required this.color,
@@ -532,43 +675,38 @@ class _MiniProductCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-        decoration: BoxDecoration(
-          color: AppColors.surface,
-          borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.border),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(6),
-              decoration: BoxDecoration(
-                color: color.withValues(alpha: 0.12),
-                borderRadius: BorderRadius.circular(6),
-              ),
-              child: Icon(icon, size: 16, color: color),
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0E1728) : const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: theme.colorScheme.outline),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Text(
+            '$count',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w700,
+              color: theme.colorScheme.onSurface,
             ),
-            const SizedBox(width: 8),
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$count',
-                  style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w700),
-                ),
-                Text(
-                  label,
-                  style: AppTextStyles.labelSmall.copyWith(
-                    color: AppColors.textSecondary,
-                    fontSize: 10,
-                  ),
-                ),
-              ],
+          ),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              color: theme.colorScheme.onSurfaceVariant,
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

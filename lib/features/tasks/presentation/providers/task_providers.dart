@@ -29,8 +29,13 @@ final myAssignedTasksProvider = Provider<List<ProcessTask>>((ref) {
 
   return tasksAsync.maybeWhen(
     data: (tasks) => tasks.where((t) {
-      final isMine = t.assignedToUid == user?.uid || t.assignedToUid.isEmpty;
-      return isMine && (t.isInProgress || t.isPending);
+      final uidMatch = user != null && t.assignedToUid.trim().isNotEmpty && t.assignedToUid.trim() == user.uid.trim();
+      final nameMatch = user != null &&
+          t.assignedToName.trim().isNotEmpty &&
+          t.assignedToName.trim().toLowerCase() == user.fullName.trim().toLowerCase();
+      final isUnassigned = t.assignedToUid.trim().isEmpty || t.assignedToName.trim().toLowerCase() == 'shop-floor team';
+      final isMine = uidMatch || nameMatch || isUnassigned;
+      return isMine && (t.isInProgress || t.isPending || t.isPaused);
     }).toList(),
     orElse: () => [],
   );

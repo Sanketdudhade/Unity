@@ -1,4 +1,6 @@
+import 'dart:ui';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/app/app.dart';
@@ -8,6 +10,37 @@ import 'package:unity/firebase_options.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Safeguard: On Android devices mirrored via PC tools (e.g., scrcpy), synthetic mouse hover
+  // packets trigger an internal Flutter framework MouseTracker assertion in debug mode
+  // (!'_debugDuringDeviceUpdate'). Filtering out hover packets on Android eliminates this assertion
+  // while preserving all touches, clicks, drags, and scrolling intact.
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    final originalOnPointerDataPacket = WidgetsBinding.instance.platformDispatcher.onPointerDataPacket;
+    if (originalOnPointerDataPacket != null) {
+      WidgetsBinding.instance.platformDispatcher.onPointerDataPacket = (PointerDataPacket packet) {
+        final sanitizedData = packet.data.where((p) => p.change != PointerChange.hover).toList();
+        if (sanitizedData.isNotEmpty) {
+          originalOnPointerDataPacket(PointerDataPacket(data: sanitizedData));
+        }
+      };
+    }
+  }
+
+  // Suppress repetitive internal framework mouse_tracker assertion loop in debug console
+  // and safeguard widget inspector against secondary crashes on deactivated elements
+  final originalOnError = FlutterError.onError;
+  FlutterError.onError = (FlutterErrorDetails details) {
+    if (details.exceptionAsString().contains('_debugDuringDeviceUpdate')) {
+      return;
+    }
+    try {
+      originalOnError?.call(details);
+    } catch (_) {
+      // Fall back to clean error output if widget inspector fails during ancestor inspection
+      FlutterError.dumpErrorToConsole(details);
+    }
+  };
 
   String? initError;
 

@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:unity/app/theme/app_colors.dart';
-import 'package:unity/app/theme/app_text_styles.dart';
+import 'package:unity/app/theme/admin_theme_extension.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/inventory/presentation/widgets/record_material_usage_dialog.dart';
 import 'package:unity/features/tasks/data/models/process_task_model.dart';
 import 'package:unity/features/tasks/presentation/providers/task_providers.dart';
 import 'package:unity/features/tasks/presentation/widgets/update_task_status_dialog.dart';
 
-/// Industrial card displaying a shop-floor process task with live stage transitions.
+/// Modern Enterprise card displaying a shop-floor process task with live stage transitions.
+/// Conforms to Section 3, 5C & 6: Full Dark & Light theme support with responsive actions.
 class ProcessTaskCard extends ConsumerWidget {
   final ProcessTask task;
 
@@ -17,17 +17,18 @@ class ProcessTaskCard extends ConsumerWidget {
     required this.task,
   });
 
-  Color _getStatusColor(String status) {
+  Color _getStatusColor(BuildContext context, String status) {
+    final tokens = context.adminTokens;
     switch (status.toLowerCase()) {
       case 'in_progress':
-        return AppColors.info;
+        return const Color(0xFF2563EB);
       case 'paused':
-        return AppColors.warning;
+        return tokens.warning;
       case 'completed':
-        return AppColors.success;
+        return tokens.success;
       case 'pending':
       default:
-        return AppColors.secondary;
+        return const Color(0xFF0F766E);
     }
   }
 
@@ -47,6 +48,7 @@ class ProcessTaskCard extends ConsumerWidget {
 
   Future<void> _quickStatusTransition(BuildContext context, WidgetRef ref, String newStatus) async {
     final messenger = ScaffoldMessenger.of(context);
+    final tokens = context.adminTokens;
     final user = ref.read(authStateProvider).user;
     final orgId = user?.organizationId;
 
@@ -63,7 +65,7 @@ class ProcessTaskCard extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text('Task [${task.workOrder}] marked as ${_formatStatusLabel(newStatus)}'),
-          backgroundColor: newStatus == 'completed' ? AppColors.success : AppColors.primary,
+          backgroundColor: newStatus == 'completed' ? tokens.success : const Color(0xFF0F766E),
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -71,7 +73,7 @@ class ProcessTaskCard extends ConsumerWidget {
       messenger.showSnackBar(
         SnackBar(
           content: Text('Failed to update: $e'),
-          backgroundColor: AppColors.error,
+          backgroundColor: tokens.danger,
           behavior: SnackBarBehavior.floating,
         ),
       );
@@ -80,29 +82,43 @@ class ProcessTaskCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final statusColor = _getStatusColor(task.status);
+    final theme = Theme.of(context);
+    final isDark = theme.brightness == Brightness.dark;
+    final tokens = context.adminTokens;
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final isMobile = screenWidth < 600;
+
+    final cardBg = isDark ? const Color(0xFF152235) : Colors.white;
+    final textPrimary = isDark ? const Color(0xFFE8EEF7) : const Color(0xFF0F172A);
+    final textSecondary = isDark ? const Color(0xFFA6B6CB) : const Color(0xFF64748B);
+    final statusColor = _getStatusColor(context, task.status);
+
     final isUrgent = task.priority.toLowerCase() == 'urgent';
     final isHigh = task.priority.toLowerCase() == 'high';
+
+    final cardBorder = task.isInProgress
+        ? statusColor.withValues(alpha: 0.6)
+        : (isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0));
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        color: cardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
-          color: task.isInProgress ? AppColors.info.withValues(alpha: 0.5) : AppColors.border,
+          color: cardBorder,
           width: task.isInProgress ? 1.5 : 1.0,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.03),
+            color: Colors.black.withValues(alpha: isDark ? 0.2 : 0.03),
             blurRadius: 6,
             offset: const Offset(0, 2),
           ),
         ],
       ),
       child: Padding(
-        padding: const EdgeInsets.all(16),
+        padding: EdgeInsets.all(isMobile ? 12 : 16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -112,14 +128,15 @@ class ProcessTaskCard extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: AppColors.primaryLight,
+                    color: const Color(0xFF0F766E),
                     borderRadius: BorderRadius.circular(6),
                   ),
                   child: Text(
                     task.workOrder,
-                    style: AppTextStyles.labelSmall.copyWith(
+                    style: const TextStyle(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
+                      fontSize: 11,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -129,13 +146,13 @@ class ProcessTaskCard extends ConsumerWidget {
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                     decoration: BoxDecoration(
-                      color: isUrgent ? AppColors.errorLight : AppColors.warningLight,
+                      color: (isUrgent ? tokens.danger : tokens.warning).withValues(alpha: isDark ? 0.25 : 0.12),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
                       isUrgent ? 'URGENT' : 'HIGH PRIORITY',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: isUrgent ? AppColors.error : AppColors.warning,
+                      style: TextStyle(
+                        color: isUrgent ? tokens.danger : tokens.warning,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
                       ),
@@ -146,7 +163,7 @@ class ProcessTaskCard extends ConsumerWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: statusColor.withValues(alpha: 0.12),
+                    color: statusColor.withValues(alpha: isDark ? 0.2 : 0.12),
                     borderRadius: BorderRadius.circular(6),
                     border: Border.all(color: statusColor.withValues(alpha: 0.3)),
                   ),
@@ -164,10 +181,10 @@ class ProcessTaskCard extends ConsumerWidget {
                       const SizedBox(width: 6),
                       Text(
                         _formatStatusLabel(task.status),
-                        style: AppTextStyles.labelSmall.copyWith(
+                        style: TextStyle(
                           color: statusColor,
                           fontWeight: FontWeight.w700,
-                          fontSize: 11,
+                          fontSize: 10.5,
                         ),
                       ),
                     ],
@@ -180,9 +197,10 @@ class ProcessTaskCard extends ConsumerWidget {
             // Task Title
             Text(
               task.title,
-              style: AppTextStyles.titleMedium.copyWith(
+              style: TextStyle(
                 fontWeight: FontWeight.w700,
-                color: AppColors.textPrimary,
+                fontSize: isMobile ? 14 : 15,
+                color: textPrimary,
               ),
             ),
             const SizedBox(height: 6),
@@ -190,22 +208,27 @@ class ProcessTaskCard extends ConsumerWidget {
             // Stage and Assigned Info
             Row(
               children: [
-                const Icon(Icons.precision_manufacturing_outlined, size: 16, color: AppColors.textSecondary),
+                Icon(Icons.precision_manufacturing_outlined, size: 14, color: textSecondary),
                 const SizedBox(width: 4),
                 Text(
                   task.stage,
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: textSecondary,
                     fontWeight: FontWeight.w600,
                   ),
                 ),
                 const SizedBox(width: 14),
-                const Icon(Icons.person_outline_rounded, size: 16, color: AppColors.textSecondary),
+                Icon(Icons.person_outline_rounded, size: 14, color: textSecondary),
                 const SizedBox(width: 4),
-                Text(
-                  task.assignedToName.isNotEmpty ? task.assignedToName : 'Shop-Floor',
-                  style: AppTextStyles.bodySmall.copyWith(
-                    color: AppColors.textSecondary,
+                Expanded(
+                  child: Text(
+                    task.assignedToName.isNotEmpty ? task.assignedToName : 'Shop-Floor',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textSecondary,
+                    ),
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
@@ -218,20 +241,21 @@ class ProcessTaskCard extends ConsumerWidget {
                 width: double.infinity,
                 padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                 decoration: BoxDecoration(
-                  color: AppColors.surfaceVariant,
+                  color: isDark ? const Color(0xFF1E2B41) : const Color(0xFFF1F5F9),
                   borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppColors.borderSubtle),
+                  border: Border.all(color: isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0)),
                 ),
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    const Icon(Icons.info_outline_rounded, size: 15, color: AppColors.secondary),
+                    const Icon(Icons.info_outline_rounded, size: 14, color: Color(0xFF0F766E)),
                     const SizedBox(width: 6),
                     Expanded(
                       child: Text(
                         task.notes,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          color: AppColors.textSecondary,
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          color: textSecondary,
                           fontStyle: FontStyle.italic,
                         ),
                       ),
@@ -253,9 +277,10 @@ class ProcessTaskCard extends ConsumerWidget {
                   icon: const Icon(Icons.edit_note_rounded, size: 16),
                   label: const Text('Update Status'),
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0F766E),
+                    side: BorderSide(color: isDark ? const Color(0xFF304155) : const Color(0xFFCBD5E1)),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    textStyle: AppTextStyles.labelSmall,
-                    foregroundColor: AppColors.secondaryDark,
+                    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                 ),
                 OutlinedButton.icon(
@@ -263,9 +288,10 @@ class ProcessTaskCard extends ConsumerWidget {
                   icon: const Icon(Icons.inventory_2_outlined, size: 16),
                   label: const Text('Log Material'),
                   style: OutlinedButton.styleFrom(
+                    foregroundColor: isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7),
+                    side: BorderSide(color: isDark ? const Color(0xFF304155) : const Color(0xFFCBD5E1)),
                     padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    textStyle: AppTextStyles.labelSmall,
-                    foregroundColor: AppColors.accentDark,
+                    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                   ),
                 ),
                 if (!task.isInProgress && !task.isCompleted)
@@ -275,8 +301,8 @@ class ProcessTaskCard extends ConsumerWidget {
                     label: const Text('Start / Resume'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      textStyle: AppTextStyles.labelSmall,
-                      backgroundColor: AppColors.info,
+                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      backgroundColor: const Color(0xFF2563EB),
                       foregroundColor: Colors.white,
                     ),
                   ),
@@ -287,8 +313,8 @@ class ProcessTaskCard extends ConsumerWidget {
                     label: const Text('Mark Complete'),
                     style: ElevatedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      textStyle: AppTextStyles.labelSmall,
-                      backgroundColor: AppColors.success,
+                      textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                      backgroundColor: tokens.success,
                       foregroundColor: Colors.white,
                     ),
                   ),
