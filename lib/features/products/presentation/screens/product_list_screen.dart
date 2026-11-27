@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,6 +9,7 @@ import 'package:unity/features/admin_dashboard/presentation/widgets/admin_page_h
 import 'package:unity/features/admin_dashboard/presentation/widgets/empty_state.dart';
 import 'package:unity/features/admin_dashboard/presentation/widgets/status_chip.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
+import 'package:unity/features/bom/presentation/widgets/product_bom_viewer_sheet.dart';
 import 'package:unity/features/products/data/models/product_model.dart';
 import 'package:unity/features/products/presentation/providers/product_providers.dart';
 
@@ -69,20 +71,26 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                 ),
               ),
               const SizedBox(width: 12),
-              Text(
-                existing == null ? 'Add Product Master' : 'Edit Product Master',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: theme.colorScheme.onSurface,
+              Expanded(
+                child: Text(
+                  existing == null ? 'Add Product Master' : 'Edit Product Master',
+                  style: TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                    color: theme.colorScheme.onSurface,
+                  ),
                 ),
               ),
             ],
           ),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Form(
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: min(440.0, MediaQuery.sizeOf(context).width - 32),
+            ),
+            child: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Form(
                 key: formKey,
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -168,6 +176,7 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
               ),
             ),
           ),
+        ),
           actions: [
             TextButton(
               onPressed: isSaving ? null : () => Navigator.pop(ctx),
@@ -424,7 +433,10 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                           const SizedBox(height: 10),
                           searchField,
                           const SizedBox(height: 8),
-                          filterRow,
+                          SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            child: filterRow,
+                          ),
                         ],
                       );
                     }
@@ -490,45 +502,67 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Row(
+                            Wrap(
+                              alignment: WrapAlignment.spaceBetween,
+                              crossAxisAlignment: WrapCrossAlignment.center,
+                              spacing: 8,
+                              runSpacing: 4,
                               children: [
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                  decoration: BoxDecoration(
-                                    color: tokens.primarySoft,
-                                    borderRadius: BorderRadius.circular(6),
-                                  ),
-                                  child: Text(
-                                    prod.partCode,
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: theme.colorScheme.primary,
-                                      fontFamily: 'monospace',
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                      decoration: BoxDecoration(
+                                        color: tokens.primarySoft,
+                                        borderRadius: BorderRadius.circular(6),
+                                      ),
+                                      child: Text(
+                                        prod.partCode,
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: theme.colorScheme.primary,
+                                          fontFamily: 'monospace',
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Container(
-                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                  decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
-                                    borderRadius: BorderRadius.circular(4),
-                                  ),
-                                  child: Text(
-                                    prod.revision,
-                                    style: TextStyle(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: theme.colorScheme.onSurfaceVariant,
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                                        borderRadius: BorderRadius.circular(4),
+                                      ),
+                                      child: Text(
+                                        prod.revision,
+                                        style: TextStyle(
+                                          fontSize: 11,
+                                          fontWeight: FontWeight.w600,
+                                          color: theme.colorScheme.onSurfaceVariant,
+                                        ),
+                                      ),
                                     ),
-                                  ),
+                                  ],
                                 ),
-                                const Spacer(),
-                                StatusChip(
-                                  label: prod.isActive ? 'ACTIVE' : 'INACTIVE',
-                                  variant: prod.isActive ? StatusVariant.success : StatusVariant.neutral,
-                                  icon: prod.isActive ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded,
+                                Wrap(
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 6,
+                                  runSpacing: 4,
+                                  children: [
+                                    if (prod.hasBom)
+                                      StatusChip(
+                                        label: 'BOM V${prod.bomVersion}',
+                                        variant: StatusVariant.info,
+                                        icon: Icons.account_tree_rounded,
+                                      ),
+                                    StatusChip(
+                                      label: prod.isActive ? 'ACTIVE' : 'INACTIVE',
+                                      variant: prod.isActive ? StatusVariant.success : StatusVariant.neutral,
+                                      icon: prod.isActive ? Icons.check_circle_outline_rounded : Icons.pause_circle_outline_rounded,
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
@@ -596,54 +630,79 @@ class _ProductListScreenState extends ConsumerState<ProductListScreen> {
                             ),
                             const SizedBox(height: 12),
 
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.end,
-                              children: [
-                                ElevatedButton.icon(
-                                  onPressed: () => context.push(RouteNames.adminProduction),
-                                  icon: const Icon(Icons.precision_manufacturing_rounded, size: 14),
-                                  label: const Text('Produce / Order'),
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: theme.colorScheme.primary,
-                                    foregroundColor: Colors.white,
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: Wrap(
+                                alignment: WrapAlignment.end,
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  OutlinedButton.icon(
+                                    onPressed: () {
+                                      showDialog(
+                                        context: context,
+                                        builder: (_) => ProductBomViewerSheet(product: prod),
+                                      );
+                                    },
+                                    icon: Icon(
+                                      prod.hasBom ? Icons.account_tree_outlined : Icons.upload_file_rounded,
+                                      size: 14,
+                                    ),
+                                    label: Text(prod.hasBom ? 'View BOM' : 'Import BOM'),
+                                    style: OutlinedButton.styleFrom(
+                                      foregroundColor: prod.hasBom ? theme.colorScheme.primary : null,
+                                      side: BorderSide(
+                                        color: prod.hasBom ? theme.colorScheme.primary : theme.colorScheme.outline,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () => _showAddEditProductDialog(context, orgId, prod),
-                                  icon: const Icon(Icons.edit_outlined, size: 14),
-                                  label: const Text('Edit'),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  ElevatedButton.icon(
+                                    onPressed: () => context.push(RouteNames.adminProduction),
+                                    icon: const Icon(Icons.precision_manufacturing_rounded, size: 14),
+                                    label: const Text('Produce / Order'),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: theme.colorScheme.primary,
+                                      foregroundColor: Colors.white,
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
                                   ),
-                                ),
-                                const SizedBox(width: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () async {
-                                    await ref.read(productRepositoryProvider).toggleProductStatus(
-                                          orgId,
-                                          prod.id,
-                                          !prod.isActive,
-                                        );
-                                  },
-                                  icon: Icon(
-                                    prod.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
-                                    size: 16,
-                                    color: prod.isActive ? tokens.success : theme.colorScheme.onSurfaceVariant,
+                                  OutlinedButton.icon(
+                                    onPressed: () => _showAddEditProductDialog(context, orgId, prod),
+                                    icon: const Icon(Icons.edit_outlined, size: 14),
+                                    label: const Text('Edit'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
                                   ),
-                                  label: Text(prod.isActive ? 'Active' : 'Inactive'),
-                                  style: OutlinedButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
-                                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  OutlinedButton.icon(
+                                    onPressed: () async {
+                                      await ref.read(productRepositoryProvider).toggleProductStatus(
+                                            orgId,
+                                            prod.id,
+                                            !prod.isActive,
+                                          );
+                                    },
+                                    icon: Icon(
+                                      prod.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
+                                      size: 16,
+                                      color: prod.isActive ? tokens.success : theme.colorScheme.onSurfaceVariant,
+                                    ),
+                                    label: Text(prod.isActive ? 'Active' : 'Inactive'),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                                      textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                    ),
                                   ),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
                           ],
                         ),

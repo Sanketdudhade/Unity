@@ -454,6 +454,8 @@ class InventoryRepository {
     required String itemId,
     required double delta,
     String? workOrder,
+    String? performedByUid,
+    String? performedByName,
   }) async {
     try {
       final docSnap = await firestore
@@ -476,8 +478,8 @@ class InventoryRepository {
         materialName: mat.name,
         type: txType,
         quantityDelta: delta >= 0 ? deltaBaseUnits : -deltaBaseUnits,
-        performedByUid: 'operator',
-        performedByName: 'Shop Floor Worker',
+        performedByUid: performedByUid ?? 'operator',
+        performedByName: performedByName ?? 'Shop Floor Worker',
         orderId: workOrder,
         notes: workOrder != null && workOrder.isNotEmpty
             ? 'Adjusted for $workOrder'

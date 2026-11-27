@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/core/firebase/firebase_providers.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
+import 'package:unity/features/production/data/models/jobwork_po_model.dart';
 import 'package:unity/features/production/data/models/process_update_model.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
 import 'package:unity/features/production/data/repositories/production_repository.dart';
@@ -81,5 +82,32 @@ final employeeAssignedProcessesStreamProvider = StreamProvider<List<OrderProcess
 
   final repository = ref.watch(productionRepositoryProvider);
   return repository.getAssignedProcessesForEmployee(orgId, uid, user?.fullName);
+});
+
+/// Real-time stream of all process stages across all active orders in the organization.
+final allActiveProcessesStreamProvider = StreamProvider<List<OrderProcessModel>>((ref) {
+  final authState = ref.watch(authStateProvider);
+  final user = authState.user;
+  final orgId = user?.organizationId;
+
+  if (orgId == null || orgId.isEmpty) {
+    return Stream.value([]);
+  }
+
+  final repository = ref.watch(productionRepositoryProvider);
+  return repository.getAllActiveProcessesStream(orgId);
+});
+
+/// Real-time stream of all Jobwork Purchase Orders for an order.
+final jobworkPosStreamProvider = StreamProvider.family<List<JobworkPoModel>, String>((ref, orderId) {
+  final authState = ref.watch(authStateProvider);
+  final orgId = authState.user?.organizationId;
+
+  if (orgId == null || orgId.isEmpty || orderId.isEmpty) {
+    return Stream.value([]);
+  }
+
+  final repository = ref.watch(productionRepositoryProvider);
+  return repository.streamJobworkPos(orgId, orderId);
 });
 

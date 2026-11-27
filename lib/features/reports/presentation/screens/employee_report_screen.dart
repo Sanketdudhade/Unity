@@ -84,25 +84,30 @@ class EmployeeReportScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(16),
                 color: AppColors.surface,
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
-                    Column(
-                      children: [
-                        Text('Total Staff', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                        Text('${employees.length}', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w800)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text('Total Staff', textAlign: TextAlign.center, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+                          Text('${employees.length}', style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w800)),
+                        ],
+                      ),
                     ),
-                    Column(
-                      children: [
-                        Text('Active Staff', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                        Text('$activeCount', style: AppTextStyles.titleMedium.copyWith(color: AppColors.success, fontWeight: FontWeight.w800)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text('Active Staff', textAlign: TextAlign.center, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+                          Text('$activeCount', style: AppTextStyles.titleMedium.copyWith(color: AppColors.success, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
                     ),
-                    Column(
-                      children: [
-                        Text('Supervisors/Admins', style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
-                        Text('$adminCount', style: AppTextStyles.titleMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w800)),
-                      ],
+                    Expanded(
+                      child: Column(
+                        children: [
+                          Text('Supervisors/Admins', textAlign: TextAlign.center, style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary)),
+                          Text('$adminCount', style: AppTextStyles.titleMedium.copyWith(color: AppColors.primary, fontWeight: FontWeight.w800)),
+                        ],
+                      ),
                     ),
                   ],
                 ),

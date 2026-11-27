@@ -170,11 +170,12 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: _selectedCategory,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Category',
                   prefixIcon: Icon(Icons.folder_outlined),
                 ),
-                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c))).toList(),
+                items: _categories.map((c) => DropdownMenuItem(value: c, child: Text(c, overflow: TextOverflow.ellipsis))).toList(),
                 onChanged: (val) {
                   if (val != null) setState(() => _selectedCategory = val);
                 },
@@ -182,6 +183,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
               const SizedBox(height: 14),
               DropdownButtonFormField<String>(
                 initialValue: _selectedUnit,
+                isExpanded: true,
                 decoration: const InputDecoration(
                   labelText: 'Standard Unit of Measure *',
                   prefixIcon: Icon(Icons.straighten_rounded),
@@ -189,7 +191,7 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                 items: _units.map((u) {
                   return DropdownMenuItem<String>(
                     value: u['unit'] as String,
-                    child: Text(u['name'] as String),
+                    child: Text(u['name'] as String, overflow: TextOverflow.ellipsis),
                   );
                 }).toList(),
                 onChanged: (val) {
@@ -203,32 +205,46 @@ class _AddMaterialScreenState extends ConsumerState<AddMaterialScreen> {
                 },
               ),
               const SizedBox(height: 14),
-              Row(
-                children: [
-                  Expanded(
-                    child: TextFormField(
-                      controller: _minStockController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: 'Min Safety Stock ($_selectedUnit)',
-                        prefixIcon: const Icon(Icons.shield_outlined),
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+              LayoutBuilder(
+                builder: (context, constraints) {
+                  final isCompact = constraints.maxWidth < 480;
+                  final minStockField = TextFormField(
+                    controller: _minStockController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Min Safety Stock ($_selectedUnit)',
+                      prefixIcon: const Icon(Icons.shield_outlined),
                     ),
-                  ),
-                  const SizedBox(width: 14),
-                  Expanded(
-                    child: TextFormField(
-                      controller: _initialStockController,
-                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                      decoration: InputDecoration(
-                        labelText: 'Initial Opening Stock ($_selectedUnit)',
-                        prefixIcon: const Icon(Icons.inventory_2_outlined),
-                      ),
-                      validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  );
+                  final initialStockField = TextFormField(
+                    controller: _initialStockController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    decoration: InputDecoration(
+                      labelText: 'Initial Opening Stock ($_selectedUnit)',
+                      prefixIcon: const Icon(Icons.inventory_2_outlined),
                     ),
-                  ),
-                ],
+                    validator: (v) => (v == null || v.trim().isEmpty) ? 'Required' : null,
+                  );
+
+                  if (isCompact) {
+                    return Column(
+                      children: [
+                        minStockField,
+                        const SizedBox(height: 14),
+                        initialStockField,
+                      ],
+                    );
+                  }
+
+                  return Row(
+                    children: [
+                      Expanded(child: minStockField),
+                      const SizedBox(width: 14),
+                      Expanded(child: initialStockField),
+                    ],
+                  );
+                },
               ),
               const SizedBox(height: 14),
               TextFormField(

@@ -206,6 +206,20 @@ class _UpdateTaskStatusDialogState extends ConsumerState<UpdateTaskStatusDialog>
     final hasStages = assignedStages.isNotEmpty;
     final hasTasks = allTasks.isNotEmpty;
 
+    // If task was passed, check if it maps to an active stage
+    if (_selectedStage == null && _selectedTask != null) {
+      final matchingStage = assignedStages.cast<OrderProcessModel?>().firstWhere(
+            (s) => s != null && (s.id == _selectedTask!.id || s.name == _selectedTask!.stage),
+            orElse: () => null,
+          );
+      if (matchingStage != null) {
+        _selectedStage = matchingStage;
+        _selectedTask = null;
+        _selectedStatus = _selectedStage!.status.toLowerCase();
+        _notesController.text = _selectedStage!.notes;
+      }
+    }
+
     // Auto-select first stage if nothing selected yet
     if (_selectedStage == null && _selectedTask == null && widget.initialStage == null && widget.initialTask == null) {
       if (hasStages) {

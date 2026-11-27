@@ -163,16 +163,17 @@ class _RaiseQueryScreenState extends ConsumerState<RaiseQueryScreen> {
                   initialValue: _woController.text.isNotEmpty && orders.any((o) => o.orderNumber == _woController.text)
                       ? _woController.text
                       : null,
+                  isExpanded: true,
                   decoration: const InputDecoration(
                     labelText: 'Linked Work Order',
                     prefixIcon: Icon(Icons.precision_manufacturing_rounded),
                   ),
-                  hint: const Text('Select active work order (Optional)'),
+                  hint: const Text('Select active work order (Optional)', overflow: TextOverflow.ellipsis),
                   items: [
-                    const DropdownMenuItem(value: '', child: Text('None / General Maintenance')),
+                    const DropdownMenuItem(value: '', child: Text('None / General Maintenance', overflow: TextOverflow.ellipsis)),
                     ...orders.map((o) => DropdownMenuItem(
                           value: o.orderNumber,
-                          child: Text('${o.orderNumber} (${o.productName})'),
+                          child: Text('${o.orderNumber} (${o.productName})', overflow: TextOverflow.ellipsis),
                         )),
                   ],
                   onChanged: (val) {

@@ -10,6 +10,11 @@ class ProductModel {
   final String unit;
   final String customerReference;
   final bool isActive;
+  final bool hasBom;
+  final String? activeBomId;
+  final int bomVersion;
+  final String bomStatus;
+  final DateTime? bomUpdatedAt;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -23,6 +28,11 @@ class ProductModel {
     this.unit = 'PCS',
     this.customerReference = '',
     this.isActive = true,
+    this.hasBom = false,
+    this.activeBomId,
+    this.bomVersion = 0,
+    this.bomStatus = 'NONE',
+    this.bomUpdatedAt,
     this.createdAt,
     this.updatedAt,
   });
@@ -51,6 +61,11 @@ class ProductModel {
       unit: data['unit'] as String? ?? 'PCS',
       customerReference: data['customerReference'] as String? ?? '',
       isActive: data['isActive'] as bool? ?? true,
+      hasBom: data['hasBom'] as bool? ?? false,
+      activeBomId: data['activeBomId'] as String?,
+      bomVersion: (data['bomVersion'] as num?)?.toInt() ?? 0,
+      bomStatus: data['bomStatus'] as String? ?? 'NONE',
+      bomUpdatedAt: parseDate(data['bomUpdatedAt']),
       createdAt: parseDate(data['createdAt']),
       updatedAt: parseDate(data['updatedAt']),
     );
@@ -66,6 +81,11 @@ class ProductModel {
       'unit': unit.trim().toUpperCase(),
       'customerReference': customerReference.trim(),
       'isActive': isActive,
+      'hasBom': hasBom,
+      'activeBomId': activeBomId,
+      'bomVersion': bomVersion,
+      'bomStatus': bomStatus,
+      'bomUpdatedAt': bomUpdatedAt != null ? Timestamp.fromDate(bomUpdatedAt!) : null,
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -81,6 +101,11 @@ class ProductModel {
     String? unit,
     String? customerReference,
     bool? isActive,
+    bool? hasBom,
+    String? activeBomId,
+    int? bomVersion,
+    String? bomStatus,
+    DateTime? bomUpdatedAt,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -94,6 +119,11 @@ class ProductModel {
       unit: unit ?? this.unit,
       customerReference: customerReference ?? this.customerReference,
       isActive: isActive ?? this.isActive,
+      hasBom: hasBom ?? this.hasBom,
+      activeBomId: activeBomId ?? this.activeBomId,
+      bomVersion: bomVersion ?? this.bomVersion,
+      bomStatus: bomStatus ?? this.bomStatus,
+      bomUpdatedAt: bomUpdatedAt ?? this.bomUpdatedAt,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

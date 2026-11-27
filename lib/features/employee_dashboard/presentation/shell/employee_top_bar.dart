@@ -149,12 +149,12 @@ class EmployeeTopBar extends ConsumerWidget implements PreferredSizeWidget {
                   ),
                 ),
 
-                // 3. Organization Badge
-                if (user?.organizationId.isNotEmpty == true) ...[
+                // 3. Organization Badge (visible on larger screens or tablets)
+                if (!isCompact && user?.organizationId.isNotEmpty == true) ...[
                   Tooltip(
                     message: 'Facility: ${user!.organizationId}',
                     child: Container(
-                      padding: EdgeInsets.symmetric(horizontal: isCompact ? 6 : 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                       decoration: BoxDecoration(
                         color: isDark ? const Color(0xFF1C2B41) : const Color(0xFFF1F5F9),
                         borderRadius: BorderRadius.circular(8),
@@ -170,17 +170,15 @@ class EmployeeTopBar extends ConsumerWidget implements PreferredSizeWidget {
                             size: 14,
                             color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0F766E),
                           ),
-                          if (!isCompact) ...[
-                            const SizedBox(width: 6),
-                            Text(
-                              user.organizationId,
-                              style: TextStyle(
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
-                                color: isDark ? const Color(0xFFE8EEF7) : const Color(0xFF0F172A),
-                              ),
+                          const SizedBox(width: 6),
+                          Text(
+                            user.organizationId,
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                              color: isDark ? const Color(0xFFE8EEF7) : const Color(0xFF0F172A),
                             ),
-                          ],
+                          ),
                         ],
                       ),
                     ),
@@ -273,43 +271,44 @@ class EmployeeTopBar extends ConsumerWidget implements PreferredSizeWidget {
                   ),
                 ),
 
-                const SizedBox(width: 4),
-
-                // 6. Sign Out Button
-                IconButton(
-                  tooltip: 'Sign Out Station',
-                  icon: const Icon(Icons.logout_rounded, size: 20),
-                  visualDensity: VisualDensity.compact,
-                  onPressed: () async {
-                    final confirmed = await showDialog<bool>(
-                      context: context,
-                      builder: (ctx) => AlertDialog(
-                        backgroundColor: theme.colorScheme.surface,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        title: const Text('Confirm Sign Out'),
-                        content: const Text('Are you sure you want to log off from this manufacturing station?'),
-                        actions: [
-                          TextButton(
-                            onPressed: () => Navigator.pop(ctx, false),
-                            child: const Text('Cancel'),
-                          ),
-                          ElevatedButton(
-                            onPressed: () => Navigator.pop(ctx, true),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: tokens.danger,
-                              foregroundColor: Colors.white,
+                // 6. Sign Out Button (desktop/tablet; mobile access is via drawer and profile)
+                if (!isCompact) ...[
+                  const SizedBox(width: 4),
+                  IconButton(
+                    tooltip: 'Sign Out Station',
+                    icon: const Icon(Icons.logout_rounded, size: 20),
+                    visualDensity: VisualDensity.compact,
+                    onPressed: () async {
+                      final confirmed = await showDialog<bool>(
+                        context: context,
+                        builder: (ctx) => AlertDialog(
+                          backgroundColor: theme.colorScheme.surface,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          title: const Text('Confirm Sign Out'),
+                          content: const Text('Are you sure you want to log off from this manufacturing station?'),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(ctx, false),
+                              child: const Text('Cancel'),
                             ),
-                            child: const Text('Sign Out'),
-                          ),
-                        ],
-                      ),
-                    );
+                            ElevatedButton(
+                              onPressed: () => Navigator.pop(ctx, true),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: tokens.danger,
+                                foregroundColor: Colors.white,
+                              ),
+                              child: const Text('Sign Out'),
+                            ),
+                          ],
+                        ),
+                      );
 
-                    if (confirmed == true) {
-                      await ref.read(authStateProvider.notifier).logout();
-                    }
-                  },
-                ),
+                      if (confirmed == true) {
+                        await ref.read(authStateProvider.notifier).logout();
+                      }
+                    },
+                  ),
+                ],
               ],
             ),
           ),

@@ -5,6 +5,7 @@ import 'package:unity/core/errors/app_exceptions.dart';
 /// Typed domain model representing a user in the system (`users/{uid}`).
 class AppUserModel {
   final String uid;
+  String get id => uid;
   final String fullName;
   final String email;
   final UserRole role;

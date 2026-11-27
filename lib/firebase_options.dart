@@ -11,10 +11,7 @@ class DefaultFirebaseOptions {
 
   static FirebaseOptions get currentPlatform {
     if (kIsWeb) {
-      throw UnsupportedError(
-        'DefaultFirebaseOptions have not been configured for web - '
-        'you can reconfigure this by running the FlutterFire CLI again.',
-      );
+      return web;
     }
     switch (defaultTargetPlatform) {
       case TargetPlatform.android:
@@ -28,13 +25,26 @@ class DefaultFirebaseOptions {
     }
   }
 
-  static const FirebaseOptions windows = FirebaseOptions(
-    apiKey: 'AIzaSyDeCft2yremo8vyqEbn_pModlfQaDQQOgs',
-    appId: '1:334889393980:android:bd6800ae936fc549964839',
+  static const FirebaseOptions web = FirebaseOptions(
+    apiKey: 'AIzaSyDdfzL4aVPQstW5xaB4lKzHMFhgFMDf1b8',
+    appId: '1:334889393980:web:cf7218c6992bbea9964839',
     messagingSenderId: '334889393980',
     projectId: 'unity-c5e69',
+    authDomain: 'unity-c5e69.firebaseapp.com',
     databaseURL: 'https://unity-c5e69-default-rtdb.firebaseio.com',
     storageBucket: 'unity-c5e69.firebasestorage.app',
+    measurementId: 'G-SWVVQBNL4X',
+  );
+
+  static const FirebaseOptions windows = FirebaseOptions(
+    apiKey: 'AIzaSyDdfzL4aVPQstW5xaB4lKzHMFhgFMDf1b8',
+    appId: '1:334889393980:web:cbe7c6b736d2aef8964839',
+    messagingSenderId: '334889393980',
+    projectId: 'unity-c5e69',
+    authDomain: 'unity-c5e69.firebaseapp.com',
+    databaseURL: 'https://unity-c5e69-default-rtdb.firebaseio.com',
+    storageBucket: 'unity-c5e69.firebasestorage.app',
+    measurementId: 'G-1H0BJ2D4W9',
   );
 
   static const FirebaseOptions android = FirebaseOptions(

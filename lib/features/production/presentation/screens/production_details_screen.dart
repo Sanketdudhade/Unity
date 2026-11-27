@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/app/theme/app_colors.dart';
@@ -11,8 +12,17 @@ import 'package:unity/features/employees/presentation/providers/employee_provide
 import 'package:unity/features/processes/presentation/widgets/unity_process_flow_chart_widget.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
+import 'package:unity/features/production/data/models/production_workflows.dart';
 import 'package:unity/features/production/presentation/providers/production_providers.dart';
 import 'package:unity/features/production/presentation/widgets/process_stage_actions_dialog.dart';
+import 'package:unity/features/production/presentation/widgets/stage_sub_processes_dialog.dart';
+import 'package:unity/features/production/presentation/widgets/jobwork_po_dialog.dart';
+import 'package:unity/features/bom/presentation/providers/bom_providers.dart';
+import 'package:unity/features/bom/presentation/widgets/bom_import_dialog.dart';
+import 'package:unity/features/bom/presentation/widgets/product_bom_viewer_sheet.dart';
+import 'package:unity/features/bom/presentation/widgets/stage_bom_inventory_dialog.dart';
+import 'package:unity/features/products/data/models/product_model.dart';
+import 'package:unity/features/products/presentation/providers/product_providers.dart';
 
 class ProductionDetailsScreen extends ConsumerStatefulWidget {
   final ProductionOrder order;
@@ -233,6 +243,9 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!context.mounted) return;
 
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final screenHeight = MediaQuery.sizeOf(context).height;
+
       showDialog(
         context: context,
         builder: (ctx) => StatefulBuilder(
@@ -267,9 +280,13 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 540,
-              child: Consumer(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: min(540.0, screenWidth - 32),
+              ),
+              child: SizedBox(
+                width: double.maxFinite,
+                child: Consumer(
                 builder: (context, ref, _) {
                   final liveStagesAsync = ref.watch(orderProcessesStreamProvider(widget.order.id));
                   final employeesAsync = ref.watch(employeesStreamProvider);
@@ -299,7 +316,7 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                       }
 
                       return SizedBox(
-                        height: 400,
+                        height: min(400.0, screenHeight * 0.45),
                         child: ListView.separated(
                           itemCount: stages.length,
                           separatorBuilder: (_, _) => const Divider(height: 12),
@@ -396,6 +413,7 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                 },
               ),
             ),
+          ),
             actions: [
               ElevatedButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -428,12 +446,14 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
       ),
-      builder: (ctx) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Row(
               children: [
                 Container(
@@ -512,78 +532,464 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                 );
               },
             ),
+
+            Consumer(
+              builder: (context, ref, _) {
+                final productsAsync = ref.watch(productsStreamProvider);
+                final products = productsAsync.value ?? [];
+                final target = widget.order.productName.trim().toLowerCase();
+
+                final matchingProduct = products.firstWhere(
+                  (p) =>
+                      p.name.trim().toLowerCase() == target ||
+                      p.partCode.trim().toLowerCase() == target,
+                  orElse: () => ProductModel(
+                    id: widget.order.productName.trim().replaceAll(RegExp(r'\s+'), '_'),
+                    partCode: widget.order.productName.trim(),
+                    name: widget.order.productName.trim(),
+                    unit: widget.order.unit,
+                  ),
+                );
+
+                final bomsAsync = ref.watch(productBomsStreamProvider(matchingProduct.id));
+                final boms = bomsAsync.value ?? [];
+                final hasBom = boms.isNotEmpty;
+
+                // Step 1: Full Product BOM management
+                if (process.sequence == 1) {
+                  if (hasBom) {
+                    return ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.blue.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.table_view_rounded, color: Colors.blue, size: 20),
+                      ),
+                      title: Text(
+                        'View Full Product BOM — ${matchingProduct.partCode}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'Complete engineering component hierarchy, specs & inventory links',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        showDialog(
+                          context: context,
+                          builder: (_) => ProductBomViewerSheet(product: matchingProduct),
+                        );
+                      },
+                    );
+                  } else {
+                    return ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withValues(alpha: 0.12),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.upload_file_rounded, color: Colors.orange, size: 20),
+                      ),
+                      title: Text(
+                        'Import Product BOM — ${matchingProduct.partCode}',
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                      subtitle: const Text(
+                        'No BOM registered yet. Upload Excel (.xlsx) or CSV',
+                        style: TextStyle(fontSize: 12),
+                      ),
+                      trailing: const Icon(Icons.chevron_right_rounded),
+                      onTap: () {
+                        Navigator.pop(ctx);
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => BomImportDialog(product: matchingProduct),
+                        );
+                      },
+                    );
+                  }
+                }
+
+                // Steps 2+: Stage-specific BOM inventory selection and inspection
+                if (!hasBom) {
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.upload_file_rounded, color: Colors.orange, size: 20),
+                    ),
+                    title: Text(
+                      'Import BOM First — ${matchingProduct.partCode}',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text(
+                      'Upload BOM to select and allocate stage inventory for this operation',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      showDialog(
+                        context: context,
+                        barrierDismissible: false,
+                        builder: (_) => BomImportDialog(product: matchingProduct),
+                      );
+                    },
+                  );
+                }
+
+                final activeBom = boms.firstWhere((b) => b.isActive, orElse: () => boms.first);
+                int allocatedCount = 0;
+                try {
+                  allocatedCount = process.selectedBomItemIds.length;
+                } catch (_) {
+                  allocatedCount = 0;
+                }
+
+                if (allocatedCount == 0) {
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F766E).withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.playlist_add_check_rounded, color: Color(0xFF0F766E), size: 20),
+                    ),
+                    title: Text(
+                      'Select Stage BOM Inventory (${process.name})',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: const Text(
+                      'Choose required components, raw materials & hardware from BOM',
+                      style: TextStyle(fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      StageBomInventoryDialog.show(
+                        context,
+                        product: matchingProduct,
+                        bom: activeBom,
+                        process: process,
+                        orderId: widget.order.id,
+                        orgId: orgId,
+                      );
+                    },
+                  );
+                } else {
+                  return ListTile(
+                    leading: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.green.withValues(alpha: 0.12),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.inventory_2_rounded, color: Colors.green, size: 20),
+                    ),
+                    title: Text(
+                      'Stage Inventory ($allocatedCount items selected)',
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(
+                      'View or edit allocated BOM materials & stock links for ${process.name}',
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () {
+                      Navigator.pop(ctx);
+                      StageBomInventoryDialog.show(
+                        context,
+                        product: matchingProduct,
+                        bom: activeBom,
+                        process: process,
+                        orderId: widget.order.id,
+                        orgId: orgId,
+                      );
+                    },
+                  );
+                }
+              },
+            ),
+
+            if (process.sequence >= 4 && process.sequence <= 11)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF6366F1).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.account_tree_rounded, color: Color(0xFF6366F1), size: 20),
+                ),
+                title: Text(
+                  process.subProcesses.isEmpty
+                      ? 'Add Sub-Processes & Allocations'
+                      : 'Sub-Processes & Allocations (${process.subProcesses.length})',
+                  style: const TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: Text(
+                  process.subProcesses.isEmpty
+                      ? 'Admin can add sub-processes and allocate to individual operators'
+                      : '${process.subProcesses.where((s) => s.isCompleted).length} of ${process.subProcesses.length} completed • Tap to manage or update status',
+                  style: const TextStyle(fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  showDialog(
+                    context: context,
+                    builder: (_) => StageSubProcessesDialog(
+                      order: widget.order,
+                      process: process,
+                    ),
+                  );
+                },
+              ),
+
+            if (process.sequence == 4)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEA580C).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.request_quote_rounded, color: Color(0xFFEA580C), size: 20),
+                ),
+                title: const Text(
+                  'M/G Jobwork Purchase Order (PO)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Create, manage & export Milling & Grinding jobwork PO from BOM components',
+                  style: TextStyle(fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  JobworkPoDialog.show(
+                    context,
+                    order: widget.order,
+                    process: process,
+                  );
+                },
+              ),
+
+            if (process.name.toUpperCase().contains('VMC') || process.sequence == 9)
+              ListTile(
+                leading: Container(
+                  padding: const EdgeInsets.all(8),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F766E).withValues(alpha: 0.12),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.receipt_long_rounded, color: Color(0xFF0F766E), size: 20),
+                ),
+                title: const Text(
+                  'VMC Purchase Order (PO)',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
+                subtitle: const Text(
+                  'Create, manage & export VMC jobwork PO from BOM components',
+                  style: TextStyle(fontSize: 12),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  JobworkPoDialog.show(
+                    context,
+                    order: widget.order,
+                    process: process,
+                  );
+                },
+              ),
           ],
         ),
       ),
-    );
-  }
+    ),
+  );
+}
 
   Widget _buildUninitializedStagesBanner(BuildContext context, String orgId) {
+    final isCompact = MediaQuery.sizeOf(context).width < 600;
+
+    final initButton = ElevatedButton.icon(
+      icon: const Icon(Icons.play_arrow_rounded, size: 16),
+      label: Text('Initialize ${ProductionWorkflows.getLabel(widget.order.productionType)}'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: const Color(0xFF0F766E),
+        foregroundColor: Colors.white,
+      ),
+      onPressed: () async {
+        try {
+          final steps = ProductionWorkflows.getStages(widget.order.productionType);
+          await ref.read(productionRepositoryProvider).initializeStagesForOrder(
+                orgId: orgId,
+                orderId: widget.order.id,
+                steps: steps,
+              );
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Initialized ${ProductionWorkflows.getLabel(widget.order.productionType)} stages for this work order!'),
+                backgroundColor: AppColors.secondary,
+              ),
+            );
+          }
+        } catch (e) {
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
+            );
+          }
+        }
+      },
+    );
+
     return Container(
       margin: const EdgeInsets.only(bottom: 20),
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: const Color(0xFF0F766E).withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF0F766E).withValues(alpha: 0.3)),
       ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF0F766E).withValues(alpha: 0.15),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.schema_rounded, color: Color(0xFF0F766E), size: 24),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+      child: isCompact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                const Text(
-                  '17 Manufacturing Stages Not Initialized',
-                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(10),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F766E).withValues(alpha: 0.15),
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(Icons.schema_rounded, color: Color(0xFF0F766E), size: 24),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                            '17 Manufacturing Stages Not Initialized',
+                            style: TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Snapshot the standard 17-stage workflow to assign employees and track progress.',
+                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  'Snapshot the standard 17-stage workflow to assign employees and track progress.',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                const SizedBox(height: 12),
+                initButton,
+              ],
+            )
+          : Row(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF0F766E).withValues(alpha: 0.15),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(Icons.schema_rounded, color: Color(0xFF0F766E), size: 24),
                 ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${ProductionWorkflows.getLabel(widget.order.productionType)} Stages Not Initialized',
+                        style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Snapshot the ${ProductionWorkflows.getLabel(widget.order.productionType)} workflow to assign employees and track progress.',
+                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 12),
+                initButton,
               ],
             ),
+    );
+  }
+
+  void _confirmAndSwitchWorkflow(BuildContext context, String orgId, String targetWorkflow) {
+    final label = ProductionWorkflows.getLabel(targetWorkflow);
+    final count = ProductionWorkflows.getStageCount(targetWorkflow);
+    final messenger = ScaffoldMessenger.of(context);
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(
+              Icons.swap_horiz_rounded,
+              color: targetWorkflow == ProductionWorkflows.cutting ? Colors.orange : Colors.blue,
+            ),
+            const SizedBox(width: 10),
+            Expanded(child: Text('Switch to $label ($count Stages)?')),
+          ],
+        ),
+        content: Text(
+          'This will replace the current stage sequence for ${widget.order.orderNumber} with the official $label ($count stages) workflow. Any existing stage statuses will be reset.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
           ),
-          const SizedBox(width: 12),
-          ElevatedButton.icon(
-            icon: const Icon(Icons.play_arrow_rounded, size: 16),
-            label: const Text('Initialize 17 Stages'),
+          ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0F766E),
+              backgroundColor: targetWorkflow == ProductionWorkflows.cutting ? Colors.orange[800] : const Color(0xFF0F766E),
               foregroundColor: Colors.white,
             ),
             onPressed: () async {
+              Navigator.pop(ctx);
               try {
-                await ref.read(productionRepositoryProvider).initializeStagesForOrder(
-                      orgId: orgId,
-                      orderId: widget.order.id,
-                    );
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(
-                      content: Text('Initialized 17 manufacturing stages for this work order!'),
-                      backgroundColor: AppColors.secondary,
-                    ),
-                  );
-                }
+                await ref.read(productionRepositoryProvider).replaceWorkflowStagesForOrder(
+                  orgId: orgId,
+                  orderId: widget.order.id,
+                  productionType: targetWorkflow,
+                );
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Replaced process workflow with $label ($count stages)!'),
+                    backgroundColor: Colors.green[700],
+                  ),
+                );
               } catch (e) {
-                if (context.mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Failed: $e'), backgroundColor: AppColors.error),
-                  );
-                }
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Failed to switch workflow: $e'),
+                    backgroundColor: AppColors.error,
+                  ),
+                );
               }
             },
+            child: Text('Confirm & Replace with $label'),
           ),
         ],
       ),
@@ -601,7 +1007,7 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
       appBar: AppBar(
         title: Text(widget.order.orderNumber),
         actions: [
-          if (user?.role.isAdmin ?? false)
+          if (user?.role.isAdmin ?? false) ...[
             TextButton.icon(
               icon: const Icon(Icons.assignment_ind_outlined, size: 18),
               label: const Text('Assign Stages'),
@@ -615,6 +1021,40 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                 processesAsync.value ?? [],
               ),
             ),
+            PopupMenuButton<String>(
+              icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
+              tooltip: 'Workflow Options',
+              onSelected: (val) {
+                if (val == 'SWITCH_CUTTING') {
+                  _confirmAndSwitchWorkflow(context, orgId, ProductionWorkflows.cutting);
+                } else if (val == 'SWITCH_NON_CUTTING') {
+                  _confirmAndSwitchWorkflow(context, orgId, ProductionWorkflows.nonCutting);
+                }
+              },
+              itemBuilder: (ctx) => [
+                const PopupMenuItem(
+                  value: 'SWITCH_CUTTING',
+                  child: Row(
+                    children: [
+                      Icon(Icons.content_cut_rounded, size: 18, color: Colors.orange),
+                      SizedBox(width: 10),
+                      Text('Switch to Cutting (14 Stages)'),
+                    ],
+                  ),
+                ),
+                const PopupMenuItem(
+                  value: 'SWITCH_NON_CUTTING',
+                  child: Row(
+                    children: [
+                      Icon(Icons.precision_manufacturing_outlined, size: 18, color: Colors.blue),
+                      SizedBox(width: 10),
+                      Text('Switch to Non-Cutting (15 Stages)'),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(width: 8),
         ],
       ),
@@ -649,39 +1089,70 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                          decoration: BoxDecoration(
-                            color: AppColors.primary,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            widget.order.orderNumber,
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                              decoration: BoxDecoration(
+                                color: AppColors.primary,
+                                borderRadius: BorderRadius.circular(6),
+                              ),
+                              child: Text(
+                                widget.order.orderNumber,
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
                             ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: AppColors.secondary.withValues(alpha: 0.12),
-                            borderRadius: BorderRadius.circular(4),
-                          ),
-                          child: Text(
-                            widget.order.priority.toUpperCase(),
-                            style: AppTextStyles.labelSmall.copyWith(
-                              color: AppColors.secondaryDark,
-                              fontWeight: FontWeight.w700,
-                              fontSize: 10,
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: widget.order.isCutting
+                                    ? Colors.orange.withValues(alpha: 0.15)
+                                    : Colors.blue.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                                border: Border.all(
+                                  color: widget.order.isCutting
+                                      ? Colors.orange.withValues(alpha: 0.5)
+                                      : Colors.blue.withValues(alpha: 0.5),
+                                ),
+                              ),
+                              child: Text(
+                                widget.order.isCutting ? 'CUTTING' : 'NON-CUTTING',
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: widget.order.isCutting ? Colors.orange[800] : Colors.blue[800],
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 10,
+                                ),
+                              ),
                             ),
-                          ),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AppColors.secondary.withValues(alpha: 0.12),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                widget.order.priority.toUpperCase(),
+                                style: AppTextStyles.labelSmall.copyWith(
+                                  color: AppColors.secondaryDark,
+                                  fontWeight: FontWeight.w700,
+                                  fontSize: 10,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
-                        const Spacer(),
                         Text(
                           'Target: ${widget.order.targetQuantity.toStringAsFixed(0)} ${widget.order.unit}',
                           style: AppTextStyles.labelMedium.copyWith(fontWeight: FontWeight.w700),
@@ -734,9 +1205,10 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
               ),
               const SizedBox(height: 20),
 
-              // Visual 17-Stage Process Flow Chart
+              // Visual Process Flow Chart (Cutting, Non-Cutting, or 17 Stages)
               UnityProcessFlowChartWidget(
                 liveOrderStages: processes,
+                productionType: widget.order.productionType,
                 showHeader: false,
                 canAssign: user?.role.isAdmin ?? false,
                 onAssignAllStages: () => _showAssignAllStagesDialog(context, orgId, processes),
@@ -759,20 +1231,23 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
               const SizedBox(height: 24),
 
               Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text('Sequential Manufacturing Stages', style: AppTextStyles.titleMedium),
-                      const SizedBox(height: 2),
-                      Text(
-                        'Later stages remain locked until prerequisite stages are approved and completed.',
-                        style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-                      ),
-                    ],
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Sequential Manufacturing Stages', style: AppTextStyles.titleMedium),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Later stages remain locked until prerequisite stages are approved and completed.',
+                          style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                        ),
+                      ],
+                    ),
                   ),
-                  if (user?.role.isAdmin ?? false)
+                  if (user?.role.isAdmin ?? false) ...[
+                    const SizedBox(width: 8),
                     OutlinedButton.icon(
                       icon: const Icon(Icons.assignment_ind_outlined, size: 15),
                       label: const Text('Assign Stages'),
@@ -783,6 +1258,7 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                       ),
                       onPressed: () => _showAssignAllStagesDialog(context, orgId, processes),
                     ),
+                  ],
                 ],
               ),
               const SizedBox(height: 12),
@@ -818,12 +1294,7 @@ class _ProductionDetailsScreenState extends ConsumerState<ProductionDetailsScree
                   return InkWell(
                     borderRadius: BorderRadius.circular(12),
                     onTap: () {
-                      ProcessStageActionsDialog.show(
-                        context,
-                        order: widget.order,
-                        process: proc,
-                        allStageStatuses: stepStatusMap,
-                      );
+                      _showStageActionOrAssignSheet(context, orgId, proc, stepStatusMap);
                     },
                     child: Container(
                       margin: const EdgeInsets.only(bottom: 12),

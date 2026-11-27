@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:unity/app/router/route_names.dart';
 import 'package:unity/app/theme/app_colors.dart';
 import 'package:unity/app/theme/app_text_styles.dart';
 import 'package:unity/core/constants/app_enums.dart';
@@ -97,6 +99,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             child: Image.asset(
                               'assets/icons/app_icon.png',
                               fit: BoxFit.cover,
+                              errorBuilder: (_, _, _) => const Icon(
+                                Icons.precision_manufacturing_rounded,
+                                color: Color(0xFF0F766E),
+                                size: 36,
+                              ),
                             ),
                           ),
                         ),
@@ -229,7 +236,30 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             return null;
                           },
                         ),
-                        const SizedBox(height: 28),
+                        const SizedBox(height: 10),
+
+                        // Forgot Password Link
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: TextButton(
+                            onPressed: isSubmitting
+                                ? null
+                                : () => context.push(RouteNames.forgotPassword),
+                            style: TextButton.styleFrom(
+                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                              minimumSize: const Size(0, 0),
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(
+                              'Forgot Password?',
+                              style: AppTextStyles.labelMedium.copyWith(
+                                color: AppColors.primary,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 24),
 
                         // Submit Button
                         ElevatedButton(

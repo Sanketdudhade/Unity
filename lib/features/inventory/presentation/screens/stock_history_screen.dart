@@ -261,11 +261,15 @@ class _StockHistoryScreenState extends ConsumerState<StockHistoryScreen> {
                               children: [
                                 const Icon(Icons.person_pin_circle_rounded, size: 14, color: AppColors.textSecondary),
                                 const SizedBox(width: 4),
-                                Text(
-                                  'By ${tx.performedByName}',
-                                  style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                                Flexible(
+                                  child: Text(
+                                    'By ${tx.performedByName}',
+                                    style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                const Spacer(),
+                                const SizedBox(width: 8),
                                 Text(
                                   tx.transactionNumber,
                                   style: AppTextStyles.labelSmall.copyWith(

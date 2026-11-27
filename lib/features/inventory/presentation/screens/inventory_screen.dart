@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/app/theme/admin_theme_extension.dart';
@@ -11,6 +12,7 @@ import 'package:unity/features/inventory/data/models/stock_balance_model.dart';
 import 'package:unity/features/inventory/presentation/providers/inventory_providers.dart';
 import 'package:unity/features/inventory/presentation/screens/add_material_screen.dart';
 import 'package:unity/features/inventory/presentation/screens/low_stock_screen.dart';
+import 'package:unity/features/inventory/presentation/screens/product_boms_tab.dart';
 import 'package:unity/features/inventory/presentation/screens/stock_history_screen.dart';
 
 /// Comprehensive Inventory & Stock Management Portal for Manufacturing.
@@ -40,7 +42,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 3, vsync: this);
+    _tabController = TabController(length: 4, vsync: this);
     _tabController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -77,53 +79,58 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
           isReceipt ? 'Receive Stock (GRN)' : 'Issue Material to Floor',
           style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface),
         ),
-        content: SizedBox(
-          width: 420,
-          child: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${balance.materialName} (${balance.materialSku})',
-                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: theme.colorScheme.onSurface),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  'Available Stock: ${balance.formattedAvailable} ${balance.unit}',
-                  style: TextStyle(
-                    color: balance.availableQuantity > 0 ? tokens.success : tokens.danger,
-                    fontWeight: FontWeight.w600,
-                    fontSize: 13,
+        content: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: min(420.0, MediaQuery.sizeOf(context).width - 32),
+          ),
+          child: SizedBox(
+            width: double.maxFinite,
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '${balance.materialName} (${balance.materialSku})',
+                    style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: theme.colorScheme.onSurface),
                   ),
-                ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: qtyController,
-                  keyboardType: const TextInputType.numberWithOptions(decimal: true),
-                  autofocus: true,
-                  decoration: InputDecoration(
-                    labelText: 'Quantity (${balance.unit}) *',
-                    prefixIcon: Icon(isReceipt ? Icons.add_box_outlined : Icons.indeterminate_check_box_outlined),
+                  const SizedBox(height: 4),
+                  Text(
+                    'Available Stock: ${balance.formattedAvailable} ${balance.unit}',
+                    style: TextStyle(
+                      color: balance.availableQuantity > 0 ? tokens.success : tokens.danger,
+                      fontWeight: FontWeight.w600,
+                      fontSize: 13,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: refController,
-                  decoration: InputDecoration(
-                    labelText: isReceipt ? 'Supplier PO / Invoice Ref' : 'Work Order # / Job Ref',
-                    prefixIcon: const Icon(Icons.tag_rounded),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: qtyController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    autofocus: true,
+                    decoration: InputDecoration(
+                      labelText: 'Quantity (${balance.unit}) *',
+                      prefixIcon: Icon(isReceipt ? Icons.add_box_outlined : Icons.indeterminate_check_box_outlined),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: notesController,
-                  decoration: const InputDecoration(
-                    labelText: 'Reason / Department Notes',
-                    prefixIcon: Icon(Icons.notes_rounded),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: refController,
+                    decoration: InputDecoration(
+                      labelText: isReceipt ? 'Supplier PO / Invoice Ref' : 'Work Order # / Job Ref',
+                      prefixIcon: const Icon(Icons.tag_rounded),
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: notesController,
+                    decoration: const InputDecoration(
+                      labelText: 'Reason / Department Notes',
+                      prefixIcon: Icon(Icons.notes_rounded),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -257,6 +264,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                     ],
                   ),
                 ),
+                const Tab(text: 'Product BOMs'),
               ],
             ),
           ),
@@ -269,6 +277,7 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                 _buildMaterialsListTab(balancesAsync),
                 _buildLedgerTab(),
                 const LowStockScreen(isEmbedded: true),
+                const ProductBomsTab(),
               ],
             ),
           ),
@@ -439,7 +448,10 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Row(
+                        Wrap(
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          spacing: 8,
+                          runSpacing: 4,
                           children: [
                             Container(
                               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -457,14 +469,12 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                                 ),
                               ),
                             ),
-                            const SizedBox(width: 8),
                             if (isLow)
                               StatusChip(
                                 label: 'LOW STOCK',
                                 variant: StatusVariant.error,
                                 icon: Icons.warning_amber_rounded,
                               ),
-                            const Spacer(),
                             Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
@@ -473,6 +483,8 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                                 Text(
                                   b.locationName,
                                   style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ],
                             ),
@@ -550,45 +562,48 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                           ],
                         ),
                         const Divider(height: 24),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.end,
-                          children: [
-                            TextButton.icon(
-                              icon: const Icon(Icons.history_rounded, size: 16),
-                              label: const Text('Ledger'),
-                              onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => StockHistoryScreen(
-                                      initialMaterialId: b.materialId,
-                                      materialName: b.materialName,
+                        Align(
+                          alignment: Alignment.centerRight,
+                          child: Wrap(
+                            alignment: WrapAlignment.end,
+                            spacing: 8,
+                            runSpacing: 8,
+                            children: [
+                              TextButton.icon(
+                                icon: const Icon(Icons.history_rounded, size: 16),
+                                label: const Text('Ledger'),
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (_) => StockHistoryScreen(
+                                        initialMaterialId: b.materialId,
+                                        materialName: b.materialName,
+                                      ),
                                     ),
-                                  ),
-                                );
-                              },
-                            ),
-                            const SizedBox(width: 8),
-                            OutlinedButton.icon(
-                              icon: const Icon(Icons.remove_circle_outline, size: 16),
-                              label: const Text('Issue'),
-                              style: OutlinedButton.styleFrom(
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                  );
+                                },
                               ),
-                              onPressed: () => _showQuickTransactionDialog(context, b, false),
-                            ),
-                            const SizedBox(width: 8),
-                            ElevatedButton.icon(
-                              icon: const Icon(Icons.add_circle_outline, size: 16),
-                              label: const Text('Receive'),
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: theme.colorScheme.primary,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                              OutlinedButton.icon(
+                                icon: const Icon(Icons.remove_circle_outline, size: 16),
+                                label: const Text('Issue'),
+                                style: OutlinedButton.styleFrom(
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                                onPressed: () => _showQuickTransactionDialog(context, b, false),
                               ),
-                              onPressed: () => _showQuickTransactionDialog(context, b, true),
-                            ),
-                          ],
+                              ElevatedButton.icon(
+                                icon: const Icon(Icons.add_circle_outline, size: 16),
+                                label: const Text('Receive'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: theme.colorScheme.primary,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+                                ),
+                                onPressed: () => _showQuickTransactionDialog(context, b, true),
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
@@ -730,11 +745,15 @@ class _InventoryScreenState extends ConsumerState<InventoryScreen> with SingleTi
                     children: [
                       Icon(Icons.person_pin_circle_rounded, size: 14, color: theme.colorScheme.onSurfaceVariant),
                       const SizedBox(width: 4),
-                      Text(
-                        'By ${tx.performedByName}',
-                        style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                      Flexible(
+                        child: Text(
+                          'By ${tx.performedByName}',
+                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
                       ),
-                      const Spacer(),
+                      const SizedBox(width: 8),
                       Text(
                         tx.transactionNumber,
                         style: TextStyle(

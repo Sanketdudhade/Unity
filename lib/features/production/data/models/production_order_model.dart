@@ -9,6 +9,7 @@ class ProductionOrder {
   final String unit;
   final String status; // 'scheduled', 'in_production', 'completed', 'on_hold'
   final String priority; // 'normal', 'high', 'urgent'
+  final String productionType; // 'CUTTING', 'NON_CUTTING'
   final DateTime? startDate;
   final DateTime? dueDate;
   final String customerName;
@@ -24,12 +25,16 @@ class ProductionOrder {
     required this.unit,
     required this.status,
     required this.priority,
+    this.productionType = 'CUTTING',
     this.startDate,
     this.dueDate,
     this.customerName = '',
     this.notes = '',
     this.updatedAt,
   });
+
+  bool get isCutting => productionType.toUpperCase() == 'CUTTING';
+  bool get isNonCutting => productionType.toUpperCase() == 'NON_CUTTING';
 
   bool get isInProduction => status.toLowerCase() == 'in_production';
   bool get isCompleted => status.toLowerCase() == 'completed';
@@ -58,6 +63,7 @@ class ProductionOrder {
       unit: data['unit'] as String? ?? 'pcs',
       status: data['status'] as String? ?? 'scheduled',
       priority: data['priority'] as String? ?? 'normal',
+      productionType: (data['productionType'] as String? ?? 'CUTTING').toUpperCase(),
       startDate: parseDate(data['startDate']),
       dueDate: parseDate(data['dueDate']),
       customerName: data['customerName'] as String? ?? '',
@@ -75,6 +81,7 @@ class ProductionOrder {
       'unit': unit.trim(),
       'status': status.toLowerCase(),
       'priority': priority.toLowerCase(),
+      'productionType': productionType.toUpperCase(),
       'startDate': startDate != null ? Timestamp.fromDate(startDate!) : null,
       'dueDate': dueDate != null ? Timestamp.fromDate(dueDate!) : null,
       'customerName': customerName.trim(),
@@ -92,6 +99,7 @@ class ProductionOrder {
     String? unit,
     String? status,
     String? priority,
+    String? productionType,
     DateTime? startDate,
     DateTime? dueDate,
     String? customerName,
@@ -107,6 +115,7 @@ class ProductionOrder {
       unit: unit ?? this.unit,
       status: status ?? this.status,
       priority: priority ?? this.priority,
+      productionType: productionType ?? this.productionType,
       startDate: startDate ?? this.startDate,
       dueDate: dueDate ?? this.dueDate,
       customerName: customerName ?? this.customerName,

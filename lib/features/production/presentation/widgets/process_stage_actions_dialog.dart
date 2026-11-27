@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/app/theme/app_colors.dart';
@@ -11,6 +12,14 @@ import 'package:unity/features/production/data/models/order_process_model.dart';
 import 'package:unity/features/production/data/models/process_update_model.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
 import 'package:unity/features/production/presentation/providers/production_providers.dart';
+import 'package:unity/features/bom/presentation/providers/bom_providers.dart';
+import 'package:unity/features/bom/presentation/widgets/bom_import_dialog.dart';
+import 'package:unity/features/bom/presentation/widgets/product_bom_viewer_sheet.dart';
+import 'package:unity/features/bom/presentation/widgets/stage_bom_inventory_dialog.dart';
+import 'package:unity/features/production/presentation/widgets/stage_sub_processes_dialog.dart';
+import 'package:unity/features/production/presentation/widgets/jobwork_po_dialog.dart';
+import 'package:unity/features/products/data/models/product_model.dart';
+import 'package:unity/features/products/presentation/providers/product_providers.dart';
 
 /// Modal dialog providing interactive workflow actions and daily update logging for a manufacturing stage.
 class ProcessStageActionsDialog extends ConsumerStatefulWidget {
@@ -98,45 +107,47 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) => AlertDialog(
           title: const Text('Assign Stage Operator', style: AppTextStyles.titleMedium),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                'Select accountable employee for Step ${widget.process.sequence}: ${widget.process.name}',
-                style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
-              ),
-              const SizedBox(height: 14),
-              DropdownButtonFormField<String?>(
-                initialValue: selectedUid != null && activeEmployees.any((e) => e.uid == selectedUid) ? selectedUid : null,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Assigned Operator',
-                  border: OutlineInputBorder(),
-                  prefixIcon: Icon(Icons.person_pin_rounded),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Select accountable employee for Step ${widget.process.sequence}: ${widget.process.name}',
+                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
                 ),
-                hint: const Text('Unassigned', overflow: TextOverflow.ellipsis),
-                items: [
-                  const DropdownMenuItem<String?>(value: null, child: Text('Unassigned', overflow: TextOverflow.ellipsis)),
-                  ...activeEmployees.map(
-                    (e) => DropdownMenuItem<String?>(
-                      value: e.uid,
-                      child: Text('${e.fullName} (${e.role.value})', overflow: TextOverflow.ellipsis),
-                    ),
+                const SizedBox(height: 14),
+                DropdownButtonFormField<String?>(
+                  initialValue: selectedUid != null && activeEmployees.any((e) => e.uid == selectedUid) ? selectedUid : null,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Assigned Operator',
+                    border: OutlineInputBorder(),
+                    prefixIcon: Icon(Icons.person_pin_rounded),
                   ),
-                ],
-                onChanged: (uid) {
-                  setDialogState(() {
-                    selectedUid = uid;
-                    if (uid != null) {
-                      selectedName = activeEmployees.firstWhere((e) => e.uid == uid).fullName;
-                    } else {
-                      selectedName = 'Unassigned';
-                    }
-                  });
-                },
-              ),
-            ],
+                  hint: const Text('Unassigned', overflow: TextOverflow.ellipsis),
+                  items: [
+                    const DropdownMenuItem<String?>(value: null, child: Text('Unassigned', overflow: TextOverflow.ellipsis)),
+                    ...activeEmployees.map(
+                      (e) => DropdownMenuItem<String?>(
+                        value: e.uid,
+                        child: Text('${e.fullName} (${e.role.value})', overflow: TextOverflow.ellipsis),
+                      ),
+                    ),
+                  ],
+                  onChanged: (uid) {
+                    setDialogState(() {
+                      selectedUid = uid;
+                      if (uid != null) {
+                        selectedName = activeEmployees.firstWhere((e) => e.uid == uid).fullName;
+                      } else {
+                        selectedName = 'Unassigned';
+                      }
+                    });
+                  },
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -201,61 +212,269 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
       processId: widget.process.id,
     )));
 
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    final screenHeight = MediaQuery.sizeOf(context).height;
+
     return AlertDialog(
       titlePadding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
       contentPadding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
       actionsPadding: const EdgeInsets.all(16),
-      title: Row(
+      title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: AppColors.primary,
-              borderRadius: BorderRadius.circular(6),
-            ),
-            child: Text(
-              'Step ${widget.process.sequence}',
-              style: AppTextStyles.labelSmall.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.w700,
+          Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.primary,
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Text(
+                  'Step ${widget.process.sequence}',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(widget.process.name, style: AppTextStyles.titleMedium),
-                const SizedBox(height: 2),
-                Text(
-                  '${widget.order.orderNumber} • ${widget.order.productName}',
-                  style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: statusColor.withValues(alpha: 0.3)),
+                ),
+                child: Text(
+                  widget.process.status.replaceAll('_', ' '),
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: statusColor,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Consumer(
+                builder: (context, ref, _) {
+                  final productsAsync = ref.watch(productsStreamProvider);
+                  final products = productsAsync.value ?? [];
+                  final target = widget.order.productName.trim().toLowerCase();
+
+                  final matchingProduct = products.firstWhere(
+                    (p) =>
+                        p.name.trim().toLowerCase() == target ||
+                        p.partCode.trim().toLowerCase() == target,
+                    orElse: () => ProductModel(
+                      id: widget.order.productName.trim().replaceAll(RegExp(r'\s+'), '_'),
+                      partCode: widget.order.productName.trim(),
+                      name: widget.order.productName.trim(),
+                      unit: widget.order.unit,
+                    ),
+                  );
+
+                  final bomsAsync = ref.watch(productBomsStreamProvider(matchingProduct.id));
+                  final boms = bomsAsync.value ?? [];
+                  final hasBom = boms.isNotEmpty;
+
+                  if (widget.process.sequence == 1) {
+                    return OutlinedButton.icon(
+                      icon: Icon(
+                        hasBom ? Icons.table_view_rounded : Icons.upload_file_rounded,
+                        size: 13,
+                        color: hasBom ? Colors.blue : Colors.orange[800],
+                      ),
+                      label: Text(
+                        hasBom ? 'View BOM' : 'Import BOM',
+                        style: TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.bold,
+                          color: hasBom ? Colors.blue : Colors.orange[800],
+                        ),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        visualDensity: VisualDensity.compact,
+                        side: BorderSide(color: hasBom ? Colors.blue : Colors.orange),
+                      ),
+                      onPressed: () {
+                        if (hasBom) {
+                          showDialog(
+                            context: context,
+                            builder: (_) => ProductBomViewerSheet(product: matchingProduct),
+                          );
+                        } else {
+                          showDialog(
+                            context: context,
+                            barrierDismissible: false,
+                            builder: (_) => BomImportDialog(product: matchingProduct),
+                          );
+                        }
+                      },
+                    );
+                  }
+
+                  // Sequence > 1
+                  if (!hasBom) {
+                    return OutlinedButton.icon(
+                      icon: Icon(Icons.upload_file_rounded, size: 13, color: Colors.orange[800]),
+                      label: Text(
+                        'Import BOM',
+                        style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.orange[800]),
+                      ),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        visualDensity: VisualDensity.compact,
+                        side: const BorderSide(color: Colors.orange),
+                      ),
+                      onPressed: () {
+                        showDialog(
+                          context: context,
+                          barrierDismissible: false,
+                          builder: (_) => BomImportDialog(product: matchingProduct),
+                        );
+                      },
+                    );
+                  }
+
+                  final activeBom = boms.firstWhere((b) => b.isActive, orElse: () => boms.first);
+                  int allocatedCount = 0;
+                  try {
+                    allocatedCount = widget.process.selectedBomItemIds.length;
+                  } catch (_) {
+                    allocatedCount = 0;
+                  }
+
+                  return OutlinedButton.icon(
+                    icon: Icon(
+                      allocatedCount > 0 ? Icons.inventory_2_rounded : Icons.playlist_add_check_rounded,
+                      size: 13,
+                      color: allocatedCount > 0 ? Colors.green[800] : const Color(0xFF0F766E),
+                    ),
+                    label: Text(
+                      allocatedCount > 0 ? 'Stage Inventory ($allocatedCount)' : 'Select Stage Inventory',
+                      style: TextStyle(
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        color: allocatedCount > 0 ? Colors.green[800] : const Color(0xFF0F766E),
+                      ),
+                    ),
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                      visualDensity: VisualDensity.compact,
+                      side: BorderSide(color: allocatedCount > 0 ? Colors.green : const Color(0xFF0F766E)),
+                    ),
+                    onPressed: () {
+                      StageBomInventoryDialog.show(
+                        context,
+                        product: matchingProduct,
+                        bom: activeBom,
+                        process: widget.process,
+                        orderId: _effectiveOrderId,
+                        orgId: orgId,
+                      );
+                    },
+                  );
+                },
+              ),
+              if (widget.process.sequence >= 4 && widget.process.sequence <= 11) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.account_tree_rounded, size: 13, color: Color(0xFF6366F1)),
+                  label: Text(
+                    widget.process.subProcesses.isEmpty
+                        ? 'Sub-Processes'
+                        : 'Sub-Processes (${widget.process.subProcesses.length})',
+                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF6366F1)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    visualDensity: VisualDensity.compact,
+                    side: const BorderSide(color: Color(0xFF6366F1)),
+                  ),
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => StageSubProcessesDialog(
+                        order: widget.order,
+                        process: widget.process,
+                      ),
+                    );
+                  },
                 ),
               ],
-            ),
+              if (widget.process.sequence == 4) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.request_quote_rounded, size: 13, color: Color(0xFFEA580C)),
+                  label: const Text(
+                    'Jobwork PO',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFFEA580C)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    visualDensity: VisualDensity.compact,
+                    side: const BorderSide(color: Color(0xFFEA580C)),
+                  ),
+                  onPressed: () {
+                    JobworkPoDialog.show(
+                      context,
+                      order: widget.order,
+                      process: widget.process,
+                    );
+                  },
+                ),
+              ],
+              if (widget.process.name.toUpperCase().contains('VMC') || widget.process.sequence == 9) ...[
+                const SizedBox(width: 8),
+                OutlinedButton.icon(
+                  icon: const Icon(Icons.receipt_long_rounded, size: 13, color: Color(0xFF0F766E)),
+                  label: const Text(
+                    'VMC PO',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Color(0xFF0F766E)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    visualDensity: VisualDensity.compact,
+                    side: const BorderSide(color: Color(0xFF0F766E)),
+                  ),
+                  onPressed: () {
+                    JobworkPoDialog.show(
+                      context,
+                      order: widget.order,
+                      process: widget.process,
+                    );
+                  },
+                ),
+              ],
+            ],
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: statusColor.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(6),
-              border: Border.all(color: statusColor.withValues(alpha: 0.3)),
-            ),
-            child: Text(
-              widget.process.status.replaceAll('_', ' '),
-              style: AppTextStyles.labelSmall.copyWith(
-                color: statusColor,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
+          const SizedBox(height: 8),
+          Text(
+            widget.process.name,
+            style: AppTextStyles.titleMedium.copyWith(fontWeight: FontWeight.w800),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
+          ),
+          const SizedBox(height: 2),
+          Text(
+            '${widget.order.orderNumber} • ${widget.order.productName}',
+            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
         ],
       ),
       content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: SingleChildScrollView(
+        constraints: BoxConstraints(
+          maxWidth: min(520.0, screenWidth - 32),
+          maxHeight: min(600.0, screenHeight * 0.70),
+        ),
+        child: SizedBox(
+          width: double.maxFinite,
+          child: SingleChildScrollView(
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -336,10 +555,16 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                 ),
                 child: Column(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 4,
                       children: [
-                        Text('Batch Progress', style: AppTextStyles.titleSmall),
+                        Text(
+                          'Batch Progress',
+                          style: AppTextStyles.titleSmall,
+                        ),
                         Text(
                           '${widget.process.completedQty} / ${widget.process.targetQty} ${widget.order.unit}',
                           style: AppTextStyles.titleSmall.copyWith(fontWeight: FontWeight.w700),
@@ -359,8 +584,11 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                       ),
                     ),
                     const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 8,
+                      runSpacing: 6,
                       children: [
                         Consumer(
                           builder: (context, ref, _) {
@@ -952,19 +1180,25 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                                 Row(
                                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                   children: [
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          isRework ? Icons.warning_amber_rounded : Icons.verified_rounded,
-                                          size: 16,
-                                          color: isRework ? AppColors.error : AppColors.secondary,
-                                        ),
-                                        const SizedBox(width: 6),
-                                        Text(
-                                          u.actorName,
-                                          style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700),
-                                        ),
-                                      ],
+                                    Expanded(
+                                      child: Row(
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          Icon(
+                                            isRework ? Icons.warning_amber_rounded : Icons.verified_rounded,
+                                            size: 16,
+                                            color: isRework ? AppColors.error : AppColors.secondary,
+                                          ),
+                                          const SizedBox(width: 6),
+                                          Flexible(
+                                            child: Text(
+                                              u.actorName,
+                                              style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w700),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
+                                          ),
+                                        ],
+                                      ),
                                     ),
                                     if (u.deltaCompletedQty > 0)
                                       Container(
@@ -988,16 +1222,17 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
                                   Text(u.notes, style: AppTextStyles.bodySmall),
                                 ],
                                 const SizedBox(height: 4),
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                Wrap(
+                                  alignment: WrapAlignment.spaceBetween,
+                                  crossAxisAlignment: WrapCrossAlignment.center,
+                                  spacing: 8,
+                                  runSpacing: 4,
                                   children: [
                                     if (u.hoursSpent != null && u.hoursSpent! > 0)
                                       Text(
                                         'Hours: ${u.hoursSpent} hrs',
                                         style: AppTextStyles.labelSmall.copyWith(color: AppColors.textSecondary),
-                                      )
-                                    else
-                                      const SizedBox.shrink(),
+                                      ),
                                     if (u.createdAt != null)
                                       Text(
                                         FactoryDateUtils.formatFactoryDate(u.createdAt!),
@@ -1017,6 +1252,7 @@ class _ProcessStageActionsDialogState extends ConsumerState<ProcessStageActionsD
             ],
           ),
         ),
+      ),
       ),
       actions: [
         TextButton(
@@ -1391,11 +1627,14 @@ class _EmployeeAssignRow extends ConsumerWidget {
                 children: [
                   const Icon(Icons.person_add_alt_1_rounded, size: 16, color: AppColors.primary),
                   const SizedBox(width: 6),
-                  Text(
-                    'Stage Operator Assignment (Admin Control)',
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontWeight: FontWeight.w700,
-                      color: AppColors.textPrimary,
+                  Expanded(
+                    child: Text(
+                      'Stage Operator Assignment (Admin Control)',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textPrimary,
+                      ),
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                 ],

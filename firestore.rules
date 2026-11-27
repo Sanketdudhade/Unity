@@ -56,7 +56,7 @@ service cloud.firestore {
     match /users/{userId} {
       allow read: if isAuthenticated();
       allow create, update: if isAuthenticated();
-      allow delete: if false;
+      allow delete: if isAdmin();
     }
 
     // 2. Organization-scoped collections
@@ -68,13 +68,25 @@ service cloud.firestore {
       match /employees/{employeeId} {
         allow read: if isOrgMember(organizationId);
         allow create, update: if isAdmin() && isOrgMember(organizationId);
-        allow delete: if false;
+        allow delete: if isAdmin() && isOrgMember(organizationId);
       }
 
       // Products master
       match /products/{productId} {
         allow read: if isOrgMember(organizationId);
         allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+
+        // Product BOMs subcollection
+        match /boms/{bomId} {
+          allow read: if isOrgMember(organizationId);
+          allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+        }
+
+        // Product BOM Files subcollection
+        match /bomFiles/{fileId} {
+          allow read: if isOrgMember(organizationId);
+          allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+        }
       }
 
       // Process templates and steps
@@ -107,7 +119,10 @@ service cloud.firestore {
       // Materials master
       match /materials/{materialId} {
         allow read: if isOrgMember(organizationId);
-        allow create, update, delete: if isAdmin() && isOrgMember(organizationId);
+        allow create, delete: if isAdmin() && isOrgMember(organizationId);
+        allow update: if (isAdmin() && isOrgMember(organizationId)) ||
+          (isOrgMember(organizationId) &&
+           request.resource.data.diff(resource.data).affectedKeys().hasOnly(['quantity', 'updatedAt']));
       }
 
       // Inventory balances: read-only from clients, modified via atomic transactions / functions
@@ -148,6 +163,39 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // Billing & Invoices: Strictly Admin Only
+      match /invoices/{invoiceId} {
+        allow read, write: if isAdmin() && isOrgMember(organizationId);
+
+        match /payments/{paymentId} {
+          allow read, write: if isAdmin() && isOrgMember(organizationId);
+        }
+
+        match /documents/{docId} {
+          allow read, write: if isAdmin() && isOrgMember(organizationId);
+        }
+      }
+
+      // Billing Customers directory: Admin Only
+      match /customers/{customerId} {
+        allow read, write: if isAdmin() && isOrgMember(organizationId);
+      }
+
+      // Billing Configuration (Company GST & Bank details): Admin Only
+      match /billingConfig/{configId} {
+        allow read, write: if isAdmin() && isOrgMember(organizationId);
+      }
+
+      // Invoice Sequence counters for atomic sequential numbering: Admin Only
+      match /invoiceCounters/{counterId} {
+        allow read, write: if isAdmin() && isOrgMember(organizationId);
+      }
+
+      // Jobwork Purchase Orders (M&G Stage 4)
+      match /jobworkPOs/{poId} {
+        allow read, write: if isOrgMember(organizationId) && isAdmin();
+      }
+
       // Backward-compatibility aliases
       match /production_orders/{orderId} {
         allow read: if isOrgMember(organizationId);
@@ -168,6 +216,30 @@ service cloud.firestore {
         allow read: if isOrgMember(organizationId);
         allow create, update: if isOrgMember(organizationId);
       }
+    }
+
+    // Root-level Billing & Invoices (Admin Only fallback)
+    match /invoices/{invoiceId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+      match /payments/{paymentId} {
+        allow read, write: if isAuthenticated() && isAdmin();
+      }
+      match /documents/{docId} {
+        allow read, write: if isAuthenticated() && isAdmin();
+      }
+    }
+    match /customers/{customerId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+    match /billingConfig/{configId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+    match /invoiceCounters/{counterId} {
+      allow read, write: if isAuthenticated() && isAdmin();
+    }
+
+    match /jobworkPOs/{poId} {
+      allow read, write: if isAuthenticated() && isAdmin();
     }
 
     // Default deny for all other paths

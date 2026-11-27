@@ -33,7 +33,7 @@ void main() {
     );
 
     // Verify initial layout
-    expect(find.text('System Access'), findsOneWidget);
+    expect(find.text('Unity Technologies'), findsOneWidget);
     expect(find.text('Email Address'), findsOneWidget);
     expect(find.text('Password'), findsOneWidget);
     expect(find.text('Sign In'), findsOneWidget);

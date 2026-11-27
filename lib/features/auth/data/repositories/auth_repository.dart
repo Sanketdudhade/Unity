@@ -149,4 +149,37 @@ class AuthRepository {
   Future<void> signOut() async {
     await auth.signOut();
   }
+
+  /// Sends a password reset email to [email] using Firebase Authentication.
+  /// Throws [AuthException] on failure.
+  Future<void> sendPasswordResetEmail({required String email}) async {
+    final cleanEmail = email.trim();
+    if (cleanEmail.isEmpty || !cleanEmail.contains('@') || !cleanEmail.contains('.')) {
+      throw const AuthException('Please enter a valid email address.');
+    }
+
+    try {
+      await auth.sendPasswordResetEmail(email: cleanEmail);
+    } on FirebaseAuthException catch (e) {
+      switch (e.code) {
+        case 'invalid-email':
+          throw const AuthException('Please enter a valid email address.');
+        case 'user-not-found':
+          // Email enumeration protection: gracefully succeed without exposing account existence
+          return;
+        case 'too-many-requests':
+          throw AuthException.tooManyRequests();
+        case 'network-request-failed':
+          throw AuthException.networkError();
+        default:
+          throw AuthException(
+            e.message ?? 'Failed to send password reset email. Please try again.',
+            code: e.code,
+          );
+      }
+    } catch (e) {
+      if (e is AppException) rethrow;
+      throw AuthException(e.toString());
+    }
+  }
 }

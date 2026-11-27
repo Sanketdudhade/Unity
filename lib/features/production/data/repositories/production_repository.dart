@@ -2,10 +2,12 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:unity/core/constants/firestore_paths.dart';
 import 'package:unity/core/errors/app_exceptions.dart';
 import 'package:unity/features/processes/data/models/process_step_model.dart';
-import 'package:unity/features/processes/data/models/process_template_model.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
+import 'package:unity/features/production/data/models/sub_process_model.dart';
+import 'package:unity/features/production/data/models/jobwork_po_model.dart';
 import 'package:unity/features/production/data/models/process_update_model.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
+import 'package:unity/features/production/data/models/production_workflows.dart';
 
 /// Repository managing production work orders, batches, and snapshotted process stages.
 class ProductionRepository {
@@ -52,7 +54,7 @@ class ProductionRepository {
     try {
       final effectiveSteps = templateSteps.isNotEmpty
           ? templateSteps
-          : ProcessTemplateModel.default17Stages();
+          : ProductionWorkflows.getStages(order.productionType);
 
       final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc();
       final batch = firestore.batch();
@@ -121,17 +123,19 @@ class ProductionRepository {
     Map<int, ({String uid, String name})>? stageAssignmentsBySequence,
   }) async {
     try {
+      final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc(orderId);
+      final orderSnap = await orderRef.get();
+      final orderData = orderSnap.data() ?? {};
+      final orderProductionType = orderData['productionType'] as String? ?? 'CUTTING';
+
       final effectiveSteps = (steps != null && steps.isNotEmpty)
           ? steps
-          : ProcessTemplateModel.default17Stages();
+          : ProductionWorkflows.getStages(orderProductionType);
 
       final processesCol = firestore.collection(FirestorePaths.orderProcessesCollection(orgId, orderId));
       final existingSnap = await processesCol.limit(1).get();
       if (existingSnap.docs.isNotEmpty) return; // Already initialized
 
-      final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc(orderId);
-      final orderSnap = await orderRef.get();
-      final orderData = orderSnap.data() ?? {};
       final targetQuantity = (orderData['targetQuantity'] as num?)?.toInt() ?? 100;
       final dueDate = (orderData['dueDate'] as Timestamp?)?.toDate();
 
@@ -169,6 +173,93 @@ class ProductionRepository {
       await batch.commit();
     } on FirebaseException catch (e) {
       throw DatabaseException('Failed to initialize stages for order: ${e.message}', code: e.code);
+    }
+  }
+
+  /// Completely replaces/resets the workflow stages for an existing order with a selected workflow type.
+  Future<void> replaceWorkflowStagesForOrder({
+    required String orgId,
+    required String orderId,
+    required String productionType,
+    List<ProcessStepModel>? steps,
+    Map<int, ({String uid, String name})>? stageAssignmentsBySequence,
+  }) async {
+    try {
+      final effectiveSteps = (steps != null && steps.isNotEmpty)
+          ? steps
+          : ProductionWorkflows.getStages(productionType);
+
+      final processesCol = firestore.collection(FirestorePaths.orderProcessesCollection(orgId, orderId));
+      final existingDocs = await processesCol.get();
+
+      final orderRef = firestore.collection(FirestorePaths.productionOrdersCollection(orgId)).doc(orderId);
+      final orderSnap = await orderRef.get();
+      final orderData = orderSnap.data() ?? {};
+      final targetQuantity = (orderData['targetQuantity'] as num?)?.toInt() ?? 100;
+      final dueDate = (orderData['dueDate'] as Timestamp?)?.toDate();
+
+      final batch = firestore.batch();
+
+      // Delete old processes
+      for (final doc in existingDocs.docs) {
+        batch.delete(doc.reference);
+      }
+
+      // Snapshot new processes
+      for (int i = 0; i < effectiveSteps.length; i++) {
+        final step = effectiveSteps[i];
+        final processRef = processesCol.doc();
+        final stageAssignment = stageAssignmentsBySequence?[step.sequence];
+        final stepEmpUid = stageAssignment?.uid.trim() ?? '';
+        final stepEmpName = stageAssignment?.name.trim() ?? (stepEmpUid.isNotEmpty ? 'Assigned' : 'Unassigned');
+
+        final process = OrderProcessModel(
+          id: processRef.id,
+          orderId: orderId,
+          templateStepId: step.id,
+          name: step.name,
+          sequence: step.sequence,
+          dependsOnStepSequence: step.dependsOnStepSequence,
+          assignedEmployeeUid: stepEmpUid,
+          assignedEmployeeName: stepEmpName,
+          targetQty: targetQuantity,
+          completedQty: 0,
+          status: stepEmpUid.isNotEmpty ? 'ASSIGNED' : 'NOT_STARTED',
+          dueAt: dueDate,
+        );
+        batch.set(processRef, process.toMap());
+      }
+
+      batch.update(orderRef, {
+        'productionType': productionType,
+        'totalProcesses': effectiveSteps.length,
+        'completedProcesses': 0,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+
+      await batch.commit();
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to replace workflow stages for order: ${e.message}', code: e.code);
+    }
+  }
+
+  /// Updates the allocated BOM inventory items for a specific process stage.
+  Future<void> updateProcessAllocatedBomItems({
+    required String orgId,
+    required String orderId,
+    required String processId,
+    required List<String> selectedBomItemIds,
+  }) async {
+    try {
+      final docRef = firestore
+          .collection(FirestorePaths.orderProcessesCollection(orgId, orderId))
+          .doc(processId);
+      await docRef.update({
+        'selectedBomItemIds': selectedBomItemIds,
+        'updatedAt': FieldValue.serverTimestamp(),
+      });
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to update stage BOM inventory: ${e.message}', code: e.code);
     }
   }
 
@@ -559,10 +650,16 @@ class ProductionRepository {
               final pUid = p.assignedEmployeeUid.trim();
               final pName = p.assignedEmployeeName.trim().toLowerCase();
 
-              final isAssigned = (cleanUid.isNotEmpty && pUid == cleanUid) ||
+              final isStageAssigned = (cleanUid.isNotEmpty && pUid == cleanUid) ||
                   (cleanName.isNotEmpty && pName.isNotEmpty && pName == cleanName.toLowerCase());
 
-              if (isAssigned) {
+              final isSubProcessAssigned = p.subProcesses.any((sp) =>
+                  (cleanUid.isNotEmpty && sp.assignedEmployeeUid.trim() == cleanUid) ||
+                  (cleanName.isNotEmpty &&
+                      sp.assignedEmployeeName.trim().isNotEmpty &&
+                      sp.assignedEmployeeName.trim().toLowerCase() == cleanName.toLowerCase()));
+
+              if (isStageAssigned || isSubProcessAssigned) {
                 assigned.add(p.orderId.isNotEmpty ? p : p.copyWith(orderId: orderDoc.id));
               }
             }
@@ -570,5 +667,194 @@ class ProductionRepository {
           assigned.sort((a, b) => a.sequence.compareTo(b.sequence));
           return assigned;
         });
+  }
+
+  /// Adds a new sub-process under a manufacturing stage (Steps 4 to 11).
+  Future<void> addSubProcess({
+    required String orgId,
+    required String orderId,
+    required String processId,
+    required SubProcessModel subProcess,
+  }) async {
+    try {
+      final docRef = firestore
+          .collection(FirestorePaths.productionOrdersCollection(orgId))
+          .doc(orderId)
+          .collection('processes')
+          .doc(processId);
+
+      await firestore.runTransaction((tx) async {
+        final snap = await tx.get(docRef);
+        if (!snap.exists) return;
+        final data = snap.data() ?? {};
+        final existingList = (data['subProcesses'] as List<dynamic>?)
+                ?.map((e) => SubProcessModel.fromMap(Map<String, dynamic>.from(e as Map)))
+                .toList() ??
+            [];
+        existingList.add(subProcess);
+        tx.update(docRef, {
+          'subProcesses': existingList.map((e) => e.toMap()).toList(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to add sub-process: ${e.message}', code: e.code);
+    }
+  }
+
+  /// Updates status of a sub-process (e.g., 'IN_PROGRESS', 'COMPLETED') by an assigned employee or admin.
+  Future<void> updateSubProcessStatus({
+    required String orgId,
+    required String orderId,
+    required String processId,
+    required String subProcessId,
+    required String newStatus,
+  }) async {
+    try {
+      final docRef = firestore
+          .collection(FirestorePaths.productionOrdersCollection(orgId))
+          .doc(orderId)
+          .collection('processes')
+          .doc(processId);
+
+      await firestore.runTransaction((tx) async {
+        final snap = await tx.get(docRef);
+        if (!snap.exists) return;
+        final data = snap.data() ?? {};
+        final existingList = (data['subProcesses'] as List<dynamic>?)
+                ?.map((e) => SubProcessModel.fromMap(Map<String, dynamic>.from(e as Map)))
+                .toList() ??
+            [];
+
+        final index = existingList.indexWhere((sp) => sp.id == subProcessId);
+        if (index == -1) return;
+
+        final now = DateTime.now();
+        final upperStatus = newStatus.toUpperCase();
+        final current = existingList[index];
+
+        final updatedSp = current.copyWith(
+          status: upperStatus,
+          startedAt: (upperStatus == 'IN_PROGRESS' && current.startedAt == null)
+              ? now
+              : current.startedAt,
+          completedAt: (upperStatus == 'COMPLETED') ? now : current.completedAt,
+          updatedAt: now,
+        );
+        existingList[index] = updatedSp;
+
+        // If stage itself is NOT_STARTED and a sub-process starts, optionally advance stage to IN_PROGRESS
+        final stageStatus = (data['status'] as String? ?? 'NOT_STARTED').toUpperCase();
+        final Map<String, dynamic> updateMap = {
+          'subProcesses': existingList.map((e) => e.toMap()).toList(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        if (upperStatus == 'IN_PROGRESS' && (stageStatus == 'NOT_STARTED' || stageStatus == 'ASSIGNED')) {
+          updateMap['status'] = 'IN_PROGRESS';
+          if (data['startedAt'] == null) {
+            updateMap['startedAt'] = FieldValue.serverTimestamp();
+          }
+        }
+
+        tx.update(docRef, updateMap);
+      });
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to update sub-process status: ${e.message}', code: e.code);
+    }
+  }
+
+  /// Removes a sub-process from a manufacturing stage.
+  Future<void> deleteSubProcess({
+    required String orgId,
+    required String orderId,
+    required String processId,
+    required String subProcessId,
+  }) async {
+    try {
+      final docRef = firestore
+          .collection(FirestorePaths.productionOrdersCollection(orgId))
+          .doc(orderId)
+          .collection('processes')
+          .doc(processId);
+
+      await firestore.runTransaction((tx) async {
+        final snap = await tx.get(docRef);
+        if (!snap.exists) return;
+        final data = snap.data() ?? {};
+        final existingList = (data['subProcesses'] as List<dynamic>?)
+                ?.map((e) => SubProcessModel.fromMap(Map<String, dynamic>.from(e as Map)))
+                .toList() ??
+            [];
+        existingList.removeWhere((sp) => sp.id == subProcessId);
+        tx.update(docRef, {
+          'subProcesses': existingList.map((e) => e.toMap()).toList(),
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      });
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to delete sub-process: ${e.message}', code: e.code);
+    }
+  }
+
+  /// Real-time stream of all processes across all active (non-completed) orders in [orgId].
+  Stream<List<OrderProcessModel>> getAllActiveProcessesStream(String orgId) {
+    return firestore
+        .collection(FirestorePaths.productionOrdersCollection(orgId))
+        .snapshots()
+        .asyncMap((ordersSnap) async {
+          final List<OrderProcessModel> allProcesses = [];
+          for (final orderDoc in ordersSnap.docs) {
+            final orderData = orderDoc.data();
+            final orderStatus = (orderData['status'] as String? ?? '').toLowerCase();
+            if (orderStatus == 'completed') continue;
+
+            final procSnap = await orderDoc.reference
+                .collection('processes')
+                .get();
+
+            for (final pDoc in procSnap.docs) {
+              final p = OrderProcessModel.fromFirestore(pDoc);
+              allProcesses.add(p.orderId.isNotEmpty ? p : p.copyWith(orderId: orderDoc.id));
+            }
+          }
+          allProcesses.sort((a, b) => a.sequence.compareTo(b.sequence));
+          return allProcesses;
+        });
+  }
+
+  // ==================== JOBWORK PURCHASE ORDERS (STAGE 4 M&G) ====================
+
+  /// Stream of all Jobwork Purchase Orders created for an order.
+  Stream<List<JobworkPoModel>> streamJobworkPos(String orgId, String orderId) {
+    return firestore
+        .collection(FirestorePaths.jobworkPosCollection(orgId))
+        .where('orderId', isEqualTo: orderId)
+        .orderBy('createdAt', descending: true)
+        .snapshots()
+        .map((snap) => snap.docs
+            .map((doc) => JobworkPoModel.fromMap(doc.data(), doc.id))
+            .toList());
+  }
+
+  /// Saves (creates or updates) an M/G Jobwork Purchase Order.
+  Future<String> saveJobworkPo(String orgId, JobworkPoModel po) async {
+    try {
+      final collectionRef = firestore.collection(FirestorePaths.jobworkPosCollection(orgId));
+      final docRef = po.id.isNotEmpty ? collectionRef.doc(po.id) : collectionRef.doc();
+      final toSave = po.copyWith(id: docRef.id);
+      await docRef.set(toSave.toMap(), SetOptions(merge: true));
+      return docRef.id;
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to save Jobwork PO: ${e.message}', code: e.code);
+    }
+  }
+
+  /// Deletes a Jobwork Purchase Order.
+  Future<void> deleteJobworkPo(String orgId, String poId) async {
+    try {
+      await firestore.doc(FirestorePaths.jobworkPoDoc(orgId, poId)).delete();
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to delete Jobwork PO: ${e.message}', code: e.code);
+    }
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/core/constants/app_enums.dart';
 import 'package:unity/core/errors/app_exceptions.dart';
@@ -145,6 +146,7 @@ class AuthNotifier extends Notifier<AuthState> {
     }
 
     state = AuthState.authenticating();
+    debugPrint('[Auth] Attempting login for: $cleanEmail');
 
     try {
       await _repository
@@ -153,34 +155,40 @@ class AuthNotifier extends Notifier<AuthState> {
             password: password,
           )
           .timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 30),
             onTimeout: () => throw const AuthException(
               'Sign in timed out. Please check your connection.',
             ),
           );
 
+      debugPrint('[Auth] Firebase sign-in successful. Fetching user profile...');
+
       // Force refresh claims on fresh login
       final profile = await _repository
           .getAuthenticatedUserProfile(forceRefresh: true)
           .timeout(
-            const Duration(seconds: 15),
+            const Duration(seconds: 30),
             onTimeout: () => throw const AuthException(
               'Profile retrieval timed out.',
             ),
           );
 
+      debugPrint('[Auth] Profile retrieved successfully for ${profile.fullName} (${profile.role}).');
       state = AuthState.authenticated(profile);
       return true;
 
     } on AccountInactiveException catch (e) {
+      debugPrint('[Auth] AccountInactiveException: ${e.message}');
       await _repository.signOut();
       state = AuthState.inactive(e.message);
       return false;
     } on AppException catch (e) {
+      debugPrint('[Auth] AppException during login: ${e.message} (code: ${e.code})');
       await _repository.signOut();
       state = AuthState.error(e.message);
       return false;
-    } catch (e) {
+    } catch (e, stack) {
+      debugPrint('[Auth] Unexpected error during login: $e\n$stack');
       await _repository.signOut();
       state = AuthState.error(ErrorHandler.getUserMessage(e));
       return false;

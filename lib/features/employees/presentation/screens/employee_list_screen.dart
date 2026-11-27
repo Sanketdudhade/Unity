@@ -286,6 +286,115 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
     }
   }
 
+  Future<void> _confirmDeleteEmployee(AppUserModel employee) async {
+    final theme = Theme.of(context);
+    final tokens = context.adminTokens;
+    final messenger = ScaffoldMessenger.of(context);
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: theme.colorScheme.outline),
+        ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.12),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.delete_forever_rounded, color: Colors.red, size: 22),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Delete Employee',
+                style: TextStyle(
+                  fontWeight: FontWeight.w700,
+                  fontSize: 18,
+                  color: theme.colorScheme.onSurface,
+                ),
+              ),
+            ),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Are you sure you want to permanently delete ${employee.fullName} (${employee.email})?',
+              style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurface),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.red.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: Colors.red.withValues(alpha: 0.2)),
+              ),
+              child: const Row(
+                children: [
+                  Icon(Icons.warning_amber_rounded, color: Colors.red, size: 20),
+                  SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'This action cannot be undone. All access for this employee account will be revoked permanently.',
+                      style: TextStyle(fontSize: 12, color: Colors.red, fontWeight: FontWeight.w500),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Delete Permanently'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        await ref.read(employeeRepositoryProvider).deleteEmployee(
+              uid: employee.uid,
+              organizationId: employee.organizationId,
+            );
+
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('${employee.fullName} was deleted successfully.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      } catch (e) {
+        messenger.showSnackBar(
+          SnackBar(
+            content: Text('Failed to delete employee: $e'),
+            backgroundColor: tokens.danger,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -511,14 +620,15 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                               ),
                             ),
                             const SizedBox(height: 6),
-                            Row(
+                            Wrap(
+                              spacing: 6,
+                              runSpacing: 4,
                               children: [
                                 StatusChip(
                                   label: employee.role.value,
                                   variant: isAdmin ? StatusVariant.info : StatusVariant.neutral,
                                   icon: isAdmin ? Icons.shield_outlined : Icons.person_outline_rounded,
                                 ),
-                                const SizedBox(width: 8),
                                 StatusChip(
                                   label: employee.isActive ? 'ACTIVE' : 'INACTIVE',
                                   variant: employee.isActive ? StatusVariant.success : StatusVariant.error,
@@ -530,14 +640,29 @@ class _EmployeeListScreenState extends ConsumerState<EmployeeListScreen> {
                         ),
                         trailing: isSelf
                             ? null
-                            : IconButton(
-                                tooltip: employee.isActive ? 'Deactivate Employee' : 'Reactivate Employee',
-                                icon: Icon(
-                                  employee.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
-                                  color: employee.isActive ? tokens.success : theme.colorScheme.onSurfaceVariant,
-                                  size: 34,
-                                ),
-                                onPressed: () => _confirmToggleStatus(employee),
+                            : Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    tooltip: employee.isActive ? 'Deactivate Employee' : 'Reactivate Employee',
+                                    icon: Icon(
+                                      employee.isActive ? Icons.toggle_on_rounded : Icons.toggle_off_rounded,
+                                      color: employee.isActive ? tokens.success : theme.colorScheme.onSurfaceVariant,
+                                      size: 34,
+                                    ),
+                                    onPressed: () => _confirmToggleStatus(employee),
+                                  ),
+                                  const SizedBox(width: 4),
+                                  IconButton(
+                                    tooltip: 'Delete Employee',
+                                    icon: const Icon(
+                                      Icons.delete_outline_rounded,
+                                      color: Colors.red,
+                                      size: 22,
+                                    ),
+                                    onPressed: () => _confirmDeleteEmployee(employee),
+                                  ),
+                                ],
                               ),
                       ),
                     );

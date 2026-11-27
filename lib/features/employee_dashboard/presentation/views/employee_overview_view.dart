@@ -26,6 +26,7 @@ class EmployeeOverviewView extends ConsumerWidget {
     final tokens = context.adminTokens;
     final screenWidth = MediaQuery.sizeOf(context).width;
 
+    final isSmallMobile = screenWidth < 360;
     final isMobile = screenWidth < 600;
     final isTablet = screenWidth >= 600 && screenWidth < 1024;
 
@@ -84,10 +85,10 @@ class EmployeeOverviewView extends ConsumerWidget {
 
             // 2. Performance Summary: 4 KPI Cards
             GridView.count(
-              crossAxisCount: isMobile ? 2 : 4,
+              crossAxisCount: isSmallMobile ? 1 : (isMobile ? 2 : 4),
               crossAxisSpacing: 12,
               mainAxisSpacing: 12,
-              childAspectRatio: isMobile ? 1.35 : (isTablet ? 1.45 : 1.9),
+              childAspectRatio: isSmallMobile ? 2.1 : (isMobile ? 1.35 : (isTablet ? 1.45 : 1.9)),
               shrinkWrap: true,
               physics: const NeverScrollableScrollPhysics(),
               children: [

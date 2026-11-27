@@ -50,10 +50,10 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
     super.dispose();
   }
 
-  Future<void> _submitDeduction() {
+  Future<void> _submitDeduction() async {
     final messenger = ScaffoldMessenger.of(context);
     final tokens = context.adminTokens;
-    if (!_formKey.currentState!.validate()) return Future.value();
+    if (!_formKey.currentState!.validate()) return;
 
     final user = ref.read(authStateProvider).user;
     final orgId = user?.organizationId;
@@ -65,7 +65,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
           backgroundColor: tokens.danger,
         ),
       );
-      return Future.value();
+      return;
     }
 
     if (_selectedItem == null) {
@@ -75,7 +75,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
           backgroundColor: tokens.danger,
         ),
       );
-      return Future.value();
+      return;
     }
 
     final qty = double.tryParse(_qtyController.text.trim());
@@ -86,16 +86,23 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
           backgroundColor: tokens.danger,
         ),
       );
-      return Future.value();
+      return;
     }
 
     setState(() => _isSubmitting = true);
 
-    return ref.read(inventoryRepositoryProvider).adjustStock(
-      orgId: orgId,
-      itemId: _selectedItem!.id,
-      delta: -qty,
-    ).then((_) {
+    try {
+      await ref.read(inventoryRepositoryProvider).adjustStock(
+        orgId: orgId,
+        itemId: _selectedItem!.id,
+        delta: -qty,
+        workOrder: _noteController.text.trim().isNotEmpty
+            ? _noteController.text.trim()
+            : null,
+        performedByUid: user?.uid,
+        performedByName: user?.fullName,
+      );
+
       if (mounted) {
         Navigator.pop(context);
         messenger.showSnackBar(
@@ -108,7 +115,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
           ),
         );
       }
-    }).catchError((err) {
+    } catch (err) {
       if (mounted) {
         setState(() => _isSubmitting = false);
         messenger.showSnackBar(
@@ -119,7 +126,7 @@ class _RecordMaterialUsageDialogState extends ConsumerState<RecordMaterialUsageD
           ),
         );
       }
-    });
+    }
   }
 
   @override

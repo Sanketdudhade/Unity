@@ -65,22 +65,24 @@ class _QueryDetailsScreenState extends ConsumerState<QueryDetailsScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('Resolve Ticket'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('Ticket: ${_currentQuery.ticketNumber}', style: AppTextStyles.labelMedium),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              maxLines: 3,
-              autofocus: true,
-              decoration: const InputDecoration(
-                labelText: 'Resolution Notes / Corrective Actions *',
-                hintText: 'e.g. Replaced optical lens, re-calibrated axis 3, part cleared.',
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('Ticket: ${_currentQuery.ticketNumber}', style: AppTextStyles.labelMedium),
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                maxLines: 3,
+                autofocus: true,
+                decoration: const InputDecoration(
+                  labelText: 'Resolution Notes / Corrective Actions *',
+                  hintText: 'e.g. Replaced optical lens, re-calibrated axis 3, part cleared.',
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -259,7 +261,13 @@ class _QueryDetailsScreenState extends ConsumerState<QueryDetailsScreen> {
                       children: [
                         const Icon(Icons.person_outline, size: 16, color: AppColors.textSecondary),
                         const SizedBox(width: 6),
-                        Text('Reported by: ${_currentQuery.reportedByName}', style: AppTextStyles.bodySmall),
+                        Expanded(
+                          child: Text(
+                            'Reported by: ${_currentQuery.reportedByName}',
+                            style: AppTextStyles.bodySmall,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
                       ],
                     ),
                     if (_currentQuery.workOrder.isNotEmpty) ...[
@@ -268,7 +276,13 @@ class _QueryDetailsScreenState extends ConsumerState<QueryDetailsScreen> {
                         children: [
                           const Icon(Icons.precision_manufacturing_outlined, size: 16, color: AppColors.textSecondary),
                           const SizedBox(width: 6),
-                          Text('Work Order: ${_currentQuery.workOrder}', style: AppTextStyles.bodySmall),
+                          Expanded(
+                            child: Text(
+                              'Work Order: ${_currentQuery.workOrder}',
+                              style: AppTextStyles.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ],
@@ -278,7 +292,13 @@ class _QueryDetailsScreenState extends ConsumerState<QueryDetailsScreen> {
                         children: [
                           const Icon(Icons.engineering_outlined, size: 16, color: AppColors.textSecondary),
                           const SizedBox(width: 6),
-                          Text('Stage: ${_currentQuery.stage}', style: AppTextStyles.bodySmall),
+                          Expanded(
+                            child: Text(
+                              'Stage: ${_currentQuery.stage}',
+                              style: AppTextStyles.bodySmall,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
                         ],
                       ),
                     ],

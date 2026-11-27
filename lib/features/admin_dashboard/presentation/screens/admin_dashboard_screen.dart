@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -40,9 +41,48 @@ class AdminDashboardScreen extends ConsumerWidget {
     final lowStockBalances = ref.watch(lowStockBalancesStreamProvider).value ?? [];
     final tasks = ref.watch(tasksStreamProvider).value ?? [];
     final orders = ref.watch(productionOrdersStreamProvider).value ?? [];
+    final activeStages = ref.watch(allActiveProcessesStreamProvider).value ?? [];
 
-    final activeProcessesCount = tasks.where((t) => t.isInProgress).length;
-    final pendingTasksCount = tasks.where((t) => t.isPending || t.isPaused).length;
+    final activeStagesCount = activeStages.where((s) => s.isInProgress).length;
+    final pendingStagesCount = activeStages.where((s) => s.isAssigned || s.status == 'BLOCKED' || s.status == 'REWORK_REQUIRED').length;
+
+    final activeProcessesCount = activeStagesCount + tasks.where((t) => t.isInProgress).length;
+    final pendingTasksCount = pendingStagesCount + tasks.where((t) => t.isPending || t.isPaused).length;
+
+    // Map active stages to displayable operations for the floor tasks list
+    final stageTasks = activeStages
+        .where((s) => s.isInProgress || s.isAssigned || s.status == 'BLOCKED' || s.isCompleted)
+        .map((s) {
+      final matchingOrder = orders.cast<ProductionOrder?>().firstWhere(
+            (o) => o != null && (o.id == s.orderId || o.orderNumber == s.orderId),
+            orElse: () => null,
+          );
+      final orderLabel = matchingOrder?.orderNumber ?? (s.orderId.isNotEmpty ? s.orderId : 'WO-ACTIVE');
+
+      String mappedStatus = 'pending';
+      if (s.isInProgress) {
+        mappedStatus = 'in_progress';
+      } else if (s.isCompleted) {
+        mappedStatus = 'completed';
+      } else if (s.status == 'BLOCKED' || s.status == 'REWORK_REQUIRED') {
+        mappedStatus = 'paused';
+      }
+
+      return ProcessTask(
+        id: s.id,
+        title: 'Step ${s.sequence}: ${s.name}',
+        stage: s.name,
+        workOrder: orderLabel,
+        assignedToUid: s.assignedEmployeeUid,
+        assignedToName: s.assignedEmployeeName,
+        status: mappedStatus,
+        priority: 'normal',
+        scheduledDate: s.dueAt,
+        notes: s.notes,
+      );
+    }).toList();
+
+    final allDisplayTasks = [...stageTasks, ...tasks];
 
     // Filter in-flight production orders
     final activeOrders = orders.where((o) => o.isInProduction || o.isScheduled).toList();
@@ -54,6 +94,7 @@ class AdminDashboardScreen extends ConsumerWidget {
     return RefreshIndicator(
       onRefresh: () async {
         ref.invalidate(tasksStreamProvider);
+        ref.invalidate(allActiveProcessesStreamProvider);
         ref.invalidate(productionOrdersStreamProvider);
         ref.invalidate(lowStockBalancesStreamProvider);
         ref.invalidate(employeeCountProvider);
@@ -361,7 +402,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 label: const Text('View All in Production'),
                 onPressed: () => context.push(RouteNames.adminProduction),
               ),
-              child: tasks.isEmpty
+              child: allDisplayTasks.isEmpty
                   ? const EmptyStateWidget(
                       icon: Icons.assignment_outlined,
                       title: 'No operations currently dispatched',
@@ -370,13 +411,13 @@ class AdminDashboardScreen extends ConsumerWidget {
                   : ListView.separated(
                       shrinkWrap: true,
                       physics: const NeverScrollableScrollPhysics(),
-                      itemCount: tasks.take(6).length,
+                      itemCount: allDisplayTasks.take(6).length,
                       separatorBuilder: (_, _) => Divider(
                         color: isDark ? const Color(0xFF304155) : const Color(0xFFF1F5F9),
                         height: 16,
                       ),
                       itemBuilder: (context, index) {
-                        final task = tasks[index];
+                        final task = allDisplayTasks[index];
                         return _buildTaskRow(context, task, isDark);
                       },
                     ),
@@ -432,6 +473,9 @@ class AdminDashboardScreen extends ConsumerWidget {
       final isDark = theme.brightness == Brightness.dark;
       final orgId = ref.read(authStateProvider).user?.organizationId ?? '';
 
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final screenHeight = MediaQuery.sizeOf(context).height;
+
       showDialog(
         context: context,
         builder: (ctx) => StatefulBuilder(
@@ -480,9 +524,13 @@ class AdminDashboardScreen extends ConsumerWidget {
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 580,
-              child: Consumer(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: min(580.0, screenWidth - 32),
+              ),
+              child: SizedBox(
+                width: double.maxFinite,
+                child: Consumer(
                 builder: (context, ref, _) {
                   final processesAsync = ref.watch(orderProcessesStreamProvider(order.id));
                   final employeesAsync = ref.watch(employeesStreamProvider);
@@ -594,7 +642,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
-                        height: 380,
+                        height: min(380.0, screenHeight * 0.45),
                         child: ListView.separated(
                           itemCount: processes.length,
                           separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -728,6 +776,7 @@ class AdminDashboardScreen extends ConsumerWidget {
                 },
               ),
             ),
+          ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -787,16 +836,20 @@ class AdminDashboardScreen extends ConsumerWidget {
               children: [
                 StatusChip.fromStatus(order.status),
                 const SizedBox(width: 8),
-                Text(
-                  order.orderNumber,
-                  style: TextStyle(
-                    fontFamily: 'monospace',
-                    fontWeight: FontWeight.w700,
-                    fontSize: 12,
-                    color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0F766E),
+                Flexible(
+                  child: Text(
+                    order.orderNumber,
+                    style: TextStyle(
+                      fontFamily: 'monospace',
+                      fontWeight: FontWeight.w700,
+                      fontSize: 12,
+                      color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0F766E),
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(width: 8),
                 Text(
                   '${order.completedQuantity.toStringAsFixed(0)} / ${order.targetQuantity.toStringAsFixed(0)} ${order.unit}',
                   style: TextStyle(
@@ -1002,9 +1055,11 @@ class AdminDashboardScreen extends ConsumerWidget {
   }
 
   Widget _buildTaskRow(BuildContext context, ProcessTask task, bool isDark) {
+    final isVeryNarrow = MediaQuery.sizeOf(context).width < 420;
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Container(
             padding: const EdgeInsets.all(7),
@@ -1020,9 +1075,8 @@ class AdminDashboardScreen extends ConsumerWidget {
               color: isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0F766E),
             ),
           ),
-          const SizedBox(width: 12),
+          const SizedBox(width: 10),
           Expanded(
-            flex: 4,
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1042,30 +1096,57 @@ class AdminDashboardScreen extends ConsumerWidget {
                     fontSize: 11,
                     color: isDark ? const Color(0xFFA6B6CB) : const Color(0xFF64748B),
                   ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                 ),
-              ],
-            ),
-          ),
-          Expanded(
-            flex: 3,
-            child: Row(
-              children: [
-                const Icon(Icons.person_pin_circle_outlined, size: 14, color: Color(0xFF64748B)),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    task.assignedToName,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: isDark ? const Color(0xFFA6B6CB) : const Color(0xFF475569),
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
+                if (isVeryNarrow && task.assignedToName.isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Row(
+                    children: [
+                      const Icon(Icons.person_pin_circle_outlined, size: 12, color: Color(0xFF64748B)),
+                      const SizedBox(width: 3),
+                      Expanded(
+                        child: Text(
+                          task.assignedToName,
+                          style: TextStyle(
+                            fontSize: 11,
+                            color: isDark ? const Color(0xFFA6B6CB) : const Color(0xFF475569),
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
+                ],
               ],
             ),
           ),
+          if (!isVeryNarrow) ...[
+            const SizedBox(width: 8),
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 130),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.person_pin_circle_outlined, size: 14, color: Color(0xFF64748B)),
+                  const SizedBox(width: 4),
+                  Flexible(
+                    child: Text(
+                      task.assignedToName,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: isDark ? const Color(0xFFA6B6CB) : const Color(0xFF475569),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+          const SizedBox(width: 8),
           StatusChip.fromStatus(task.status),
         ],
       ),

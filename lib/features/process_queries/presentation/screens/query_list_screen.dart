@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/app/theme/admin_theme_extension.dart';
@@ -66,20 +67,26 @@ class _QueryListScreenState extends ConsumerState<QueryListScreen> {
                   child: Icon(Icons.help_outline_rounded, color: tokens.danger, size: 20),
                 ),
                 const SizedBox(width: 12),
-                Text(
-                  'Raise Shop-Floor Ticket',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: theme.colorScheme.onSurface,
+                Expanded(
+                  child: Text(
+                    'Raise Shop-Floor Ticket',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      color: theme.colorScheme.onSurface,
+                    ),
                   ),
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 440,
-              child: SingleChildScrollView(
-                child: Form(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: min(440.0, MediaQuery.sizeOf(context).width - 32),
+              ),
+              child: SizedBox(
+                width: double.maxFinite,
+                child: SingleChildScrollView(
+                  child: Form(
                   key: formKey,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -165,6 +172,7 @@ class _QueryListScreenState extends ConsumerState<QueryListScreen> {
                 ),
               ),
             ),
+          ),
             actions: [
               TextButton(
                 onPressed: isSaving ? null : () => Navigator.pop(ctx),
@@ -254,43 +262,48 @@ class _QueryListScreenState extends ConsumerState<QueryListScreen> {
             'Resolve Ticket ${query.ticketNumber}',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface),
           ),
-          content: SizedBox(
-            width: 440,
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    query.title,
-                    style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
-                  ),
-                  const SizedBox(height: 12),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedStatus,
-                    isExpanded: true,
-                    decoration: const InputDecoration(
-                      labelText: 'Update Status',
+          content: ConstrainedBox(
+            constraints: BoxConstraints(
+              maxWidth: min(440.0, MediaQuery.sizeOf(context).width - 32),
+            ),
+            child: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      query.title,
+                      style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
                     ),
-                    items: const [
-                      DropdownMenuItem(value: 'in_review', child: Text('In Review / Investigating', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'resolved', child: Text('Mark as Resolved', overflow: TextOverflow.ellipsis)),
-                      DropdownMenuItem(value: 'open', child: Text('Reopen Ticket', overflow: TextOverflow.ellipsis)),
-                    ],
-                    onChanged: (v) {
-                      if (v != null) setDialogState(() => selectedStatus = v);
-                    },
-                  ),
-                  const SizedBox(height: 12),
-                  TextFormField(
-                    controller: resolutionController,
-                    maxLines: 3,
-                    decoration: const InputDecoration(
-                      labelText: 'Resolution / Action Taken Notes *',
-                      hintText: 'e.g. Replaced hydraulic filter, pressure normalized to 120 PSI.',
+                    const SizedBox(height: 12),
+                    DropdownButtonFormField<String>(
+                      initialValue: selectedStatus,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Update Status',
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'in_review', child: Text('In Review / Investigating', overflow: TextOverflow.ellipsis)),
+                        DropdownMenuItem(value: 'resolved', child: Text('Mark as Resolved', overflow: TextOverflow.ellipsis)),
+                        DropdownMenuItem(value: 'open', child: Text('Reopen Ticket', overflow: TextOverflow.ellipsis)),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setDialogState(() => selectedStatus = v);
+                      },
                     ),
-                  ),
-                ],
+                    const SizedBox(height: 12),
+                    TextFormField(
+                      controller: resolutionController,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Resolution / Action Taken Notes *',
+                        hintText: 'e.g. Replaced hydraulic filter, pressure normalized to 120 PSI.',
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

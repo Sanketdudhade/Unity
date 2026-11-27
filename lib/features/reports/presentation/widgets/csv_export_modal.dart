@@ -2,8 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:unity/app/theme/app_colors.dart';
 import 'package:unity/app/theme/app_text_styles.dart';
+import 'package:unity/core/utils/file_downloader.dart';
 
-/// Modal dialog previewing and copying generated CSV data to clipboard.
+/// Modal dialog previewing and copying/downloading generated CSV data.
 class CsvExportModal extends StatelessWidget {
   final String title;
   final String filename;
@@ -41,6 +42,7 @@ class CsvExportModal extends StatelessWidget {
     final messenger = ScaffoldMessenger.of(context);
 
     return AlertDialog(
+      actionsOverflowButtonSpacing: 8,
       title: Row(
         children: [
           Container(
@@ -63,12 +65,13 @@ class CsvExportModal extends StatelessWidget {
           ),
         ],
       ),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 520),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      content: SingleChildScrollView(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 520),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
               decoration: BoxDecoration(
@@ -79,7 +82,13 @@ class CsvExportModal extends StatelessWidget {
                 children: [
                   const Icon(Icons.insert_drive_file_outlined, size: 16, color: AppColors.textSecondary),
                   const SizedBox(width: 6),
-                  Text(filename, style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600)),
+                  Expanded(
+                    child: Text(
+                      filename,
+                      style: AppTextStyles.labelSmall.copyWith(fontWeight: FontWeight.w600),
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -109,22 +118,67 @@ class CsvExportModal extends StatelessWidget {
           ],
         ),
       ),
+    ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close')),
-        ElevatedButton.icon(
-          icon: const Icon(Icons.copy_rounded, size: 16),
-          label: const Text('Copy to Clipboard'),
+        TextButton.icon(
+          icon: const Icon(Icons.copy_rounded, size: 14),
+          label: const Text('Copy'),
           onPressed: () async {
             await Clipboard.setData(ClipboardData(text: csvContent));
             if (context.mounted) {
-              Navigator.pop(context);
               messenger.showSnackBar(
                 SnackBar(
-                  content: Text('Copied $recordCount CSV rows to clipboard! Ready to paste into Excel or Sheets.'),
+                  content: Text('Copied $recordCount CSV rows to clipboard!'),
                   backgroundColor: AppColors.success,
                   behavior: SnackBarBehavior.floating,
                 ),
               );
+            }
+          },
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Close'),
+        ),
+        ElevatedButton.icon(
+          icon: const Icon(Icons.download_rounded, size: 18),
+          label: const Text('Download CSV'),
+          style: ElevatedButton.styleFrom(
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+          ),
+          onPressed: () async {
+            final result = await downloadFile(
+              filename: filename,
+              content: csvContent,
+            );
+            if (context.mounted) {
+              Navigator.pop(context);
+              if (result.success) {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text('Downloaded $filename to Downloads folder!'),
+                    backgroundColor: AppColors.success,
+                    behavior: SnackBarBehavior.floating,
+                    action: result.filePath != null
+                        ? SnackBarAction(
+                            label: 'Show in Folder',
+                            textColor: Colors.white,
+                            onPressed: () => openDownloadedFile(result.filePath!),
+                          )
+                        : null,
+                  ),
+                );
+              } else {
+                messenger.showSnackBar(
+                  SnackBar(
+                    content: Text(result.message ?? 'Failed to download CSV.'),
+                    backgroundColor: AppColors.error,
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
             }
           },
         ),

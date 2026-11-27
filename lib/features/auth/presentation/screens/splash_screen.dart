@@ -20,8 +20,9 @@ class SplashScreen extends ConsumerWidget {
       backgroundColor: AppColors.primary,
       body: SafeArea(
         child: Center(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 32.0),
+          child: SingleChildScrollView(
+            physics: const ClampingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 32.0, vertical: 24.0),
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
@@ -43,6 +44,11 @@ class SplashScreen extends ConsumerWidget {
                   child: Image.asset(
                     'assets/icons/app_icon.png',
                     fit: BoxFit.cover,
+                    errorBuilder: (_, _, _) => const Icon(
+                      Icons.precision_manufacturing_rounded,
+                      color: Color(0xFF2DD4BF),
+                      size: 48,
+                    ),
                   ),
                 ),
                 const SizedBox(height: 24),

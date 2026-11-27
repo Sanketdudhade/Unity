@@ -2,6 +2,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/process_queries/presentation/providers/query_providers.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
+import 'package:unity/features/production/data/models/production_order_model.dart';
 import 'package:unity/features/production/presentation/providers/production_providers.dart';
 import 'package:unity/features/tasks/data/models/process_task_model.dart';
 import 'package:unity/features/tasks/presentation/providers/task_providers.dart';
@@ -196,10 +197,97 @@ final filteredEmployeeStagesProvider = Provider<List<OrderProcessModel>>((ref) {
 /// Filtered list of tasks assigned to the employee based on search & filter state.
 final filteredEmployeeTasksProvider = Provider<List<ProcessTask>>((ref) {
   final tasks = ref.watch(myAssignedTasksProvider);
+  final stagesAsync = ref.watch(employeeAssignedProcessesStreamProvider);
+  final ordersAsync = ref.watch(productionOrdersStreamProvider);
+  final stages = stagesAsync.value ?? [];
+  final orders = ordersAsync.value ?? [];
+
   final filter = ref.watch(employeeTaskFilterProvider);
   final search = ref.watch(employeeTaskSearchProvider).trim().toLowerCase();
 
-  return tasks.where((task) {
+  // Convert assigned 17-stages into ProcessTask objects so they appear in My Tasks
+  final stageTasks = stages.map((stage) {
+    final matchingOrder = orders.cast<ProductionOrder?>().firstWhere(
+          (o) => o != null && (o.id == stage.orderId || o.orderNumber == stage.orderId),
+          orElse: () => null,
+        );
+    final orderNum = matchingOrder?.orderNumber ?? (stage.orderId.isNotEmpty ? stage.orderId : 'WO-ACTIVE');
+    final prodName = matchingOrder != null ? ' (${matchingOrder.productName})' : '';
+
+    String mappedStatus = 'pending';
+    if (stage.isInProgress) {
+      mappedStatus = 'in_progress';
+    } else if (stage.isCompleted) {
+      mappedStatus = 'completed';
+    } else if (stage.status == 'BLOCKED' || stage.status == 'REWORK_REQUIRED') {
+      mappedStatus = 'paused';
+    } else if (stage.status == 'ASSIGNED') {
+      mappedStatus = 'pending';
+    }
+
+    return ProcessTask(
+      id: stage.id,
+      title: 'Step ${stage.sequence}: ${stage.name}$prodName',
+      stage: stage.name,
+      workOrder: orderNum,
+      assignedToUid: stage.assignedEmployeeUid,
+      assignedToName: stage.assignedEmployeeName,
+      status: mappedStatus,
+      priority: 'normal',
+      scheduledDate: stage.dueAt,
+      notes: stage.notes,
+    );
+  }).toList();
+
+  // Convert allocated sub-processes (Steps 4 to 11) for this employee into ProcessTask items
+  final List<ProcessTask> subProcessTasks = [];
+  final currentUser = ref.watch(authStateProvider).user;
+  final currentUid = currentUser?.uid.trim() ?? '';
+  final currentName = currentUser?.fullName.trim().toLowerCase() ?? '';
+
+  for (final stage in stages) {
+    final matchingOrder = orders.cast<ProductionOrder?>().firstWhere(
+          (o) => o != null && (o.id == stage.orderId || o.orderNumber == stage.orderId),
+          orElse: () => null,
+        );
+    final orderNum = matchingOrder?.orderNumber ?? (stage.orderId.isNotEmpty ? stage.orderId : 'WO-ACTIVE');
+    final prodName = matchingOrder != null ? ' (${matchingOrder.productName})' : '';
+
+    for (final sp in stage.subProcesses) {
+      final isMine = (currentUid.isNotEmpty && sp.assignedEmployeeUid.trim() == currentUid) ||
+          (currentName.isNotEmpty &&
+              sp.assignedEmployeeName.trim().isNotEmpty &&
+              sp.assignedEmployeeName.trim().toLowerCase() == currentName);
+
+      if (isMine) {
+        String spStatus = 'pending';
+        if (sp.isInProgress) {
+          spStatus = 'in_progress';
+        } else if (sp.isCompleted) {
+          spStatus = 'completed';
+        } else if (sp.isBlocked) {
+          spStatus = 'paused';
+        }
+
+        subProcessTasks.add(ProcessTask(
+          id: sp.id,
+          title: 'Step ${stage.sequence}: ${stage.name} → ${sp.title}$prodName',
+          stage: '${stage.name} (${sp.title})',
+          workOrder: orderNum,
+          assignedToUid: sp.assignedEmployeeUid,
+          assignedToName: sp.assignedEmployeeName,
+          status: spStatus,
+          priority: 'high',
+          scheduledDate: sp.startedAt ?? stage.dueAt,
+          notes: sp.description,
+        ));
+      }
+    }
+  }
+
+  final combined = [...stageTasks, ...subProcessTasks, ...tasks];
+
+  return combined.where((task) {
     if (filter != 'All') {
       switch (filter) {
         case 'In Progress':

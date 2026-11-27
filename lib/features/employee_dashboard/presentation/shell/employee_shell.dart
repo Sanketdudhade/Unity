@@ -1,15 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:unity/core/responsive/responsive.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/employee_dashboard/presentation/providers/employee_dashboard_provider.dart';
 import 'employee_sidebar.dart';
 import 'employee_top_bar.dart';
 
 /// Responsive enterprise application shell for the Employee Terminal.
-/// Conforms to Section 4:
+/// Conforms to Section 4 & Responsive Guidelines:
 /// - Android Mobile (< 600px): Scaffold + Drawer + TopBar + Bottom NavigationBar.
-/// - Android Tablet (600px - 1023px): Collapsed Rail + TopBar.
-/// - Windows Desktop (>= 1024px): Persistent Collapsible Sidebar + Desktop Header.
+/// - Android Tablet (600px - 899px): Collapsed Rail + TopBar.
+/// - Small Desktop (900px - 1199px): Compact Sidebar + TopBar.
+/// - Windows Desktop (>= 1200px): Persistent Collapsible Sidebar + Desktop Header.
 class EmployeeShell extends ConsumerStatefulWidget {
   final Widget child;
 
@@ -47,11 +49,14 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final isDesktop = width >= 1024;
-        final isTablet = width >= 600 && width < 1024;
+        final isMobile = width < ResponsiveBreakpoints.mobileMax;
+        final isTablet = width >= ResponsiveBreakpoints.mobileMax &&
+            width < ResponsiveBreakpoints.tabletMax;
+        final isSmallDesktop = width >= ResponsiveBreakpoints.tabletMax &&
+            width < ResponsiveBreakpoints.smallDesktopMax;
 
         // 1. Mobile Layout (< 600px): Scaffold with Drawer, TopBar, and Bottom NavigationBar
-        if (!isDesktop && !isTablet) {
+        if (isMobile) {
           // In bottom bar, map 4 primary destinations (Overview, Station, Tasks, Materials).
           // If Tab 4 (Tickets) is active from drawer/shortcuts, bottom bar doesn't highlight or shows drawer.
           final bottomBarIndex = activeTab <= 3 ? activeTab : 0;
@@ -64,7 +69,7 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
                 isDrawer: true,
               ),
             ),
-            body: widget.child,
+            body: SafeArea(child: widget.child),
             bottomNavigationBar: NavigationBar(
               selectedIndex: bottomBarIndex,
               onDestinationSelected: (index) {
@@ -114,7 +119,7 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
           );
         }
 
-        // 2. Tablet Layout (600px - 1023px): Collapsed Rail + TopBar
+        // 2. Tablet Layout (600px - 899px): Collapsed Rail + TopBar
         if (isTablet) {
           return Scaffold(
             body: Row(
@@ -139,12 +144,14 @@ class _EmployeeShellState extends ConsumerState<EmployeeShell> {
           );
         }
 
-        // 3. Desktop Layout (>= 1024px): Persistent Sidebar with collapse toggle
+        // 3. Small Desktop (900px - 1199px) & Desktop (>= 1200px): Persistent Sidebar with collapse toggle
+        final effectiveCollapsed = isSmallDesktop ? true : _isCollapsed;
+
         return Scaffold(
           body: Row(
             children: [
               EmployeeSidebar(
-                isCollapsed: _isCollapsed,
+                isCollapsed: effectiveCollapsed,
                 onToggleCollapse: _toggleCollapse,
               ),
               Expanded(

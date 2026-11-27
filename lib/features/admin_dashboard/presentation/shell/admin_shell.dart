@@ -1,11 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:unity/core/responsive/responsive.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'admin_sidebar.dart';
 import 'admin_top_bar.dart';
 
 /// Modern Enterprise Admin Shell wrapping all admin screens.
-/// Conforms to Section A4: Desktop fixed sidebar, tablet rail, mobile drawer.
+/// Conforms to Section A4 & Responsive Guidelines:
+/// - Android Mobile (< 600 px): Scaffold with Drawer + TopBar.
+/// - Tablet (600 - 899 px): Collapsed Rail + TopBar.
+/// - Small Desktop (900 - 1199 px): Compact persistent sidebar with toggle.
+/// - Desktop & Large Desktop (>= 1200 px): Persistent expanded sidebar with collapse toggle and max content width constraint.
 class AdminShell extends ConsumerStatefulWidget {
   final String currentPath;
   final Widget child;
@@ -41,11 +46,14 @@ class _AdminShellState extends ConsumerState<AdminShell> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final width = constraints.maxWidth;
-        final isDesktop = width >= 1024;
-        final isTablet = width >= 600 && width < 1024;
+        final isMobile = width < ResponsiveBreakpoints.mobileMax;
+        final isTablet = width >= ResponsiveBreakpoints.mobileMax &&
+            width < ResponsiveBreakpoints.tabletMax;
+        final isSmallDesktop = width >= ResponsiveBreakpoints.tabletMax &&
+            width < ResponsiveBreakpoints.smallDesktopMax;
 
         // 1. Mobile Layout (< 600px): Scaffold with Drawer
-        if (!isDesktop && !isTablet) {
+        if (isMobile) {
           return Scaffold(
             appBar: AdminTopBar(
               currentPath: widget.currentPath,
@@ -58,11 +66,13 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                 isDrawer: true,
               ),
             ),
-            body: widget.child,
+            body: SafeArea(
+              child: widget.child,
+            ),
           );
         }
 
-        // 2. Tablet Layout (600px - 1023px): Collapsed rail
+        // 2. Tablet Layout (600px - 899px): Collapsed rail
         if (isTablet) {
           return Scaffold(
             body: Row(
@@ -89,13 +99,15 @@ class _AdminShellState extends ConsumerState<AdminShell> {
           );
         }
 
-        // 3. Desktop Layout (>= 1024px): Persistent Sidebar with collapse toggle
+        // 3. Small Desktop (900px - 1199px) & Desktop (>= 1200px): Persistent Sidebar with collapse toggle
+        final effectiveCollapsed = isSmallDesktop ? true : _isCollapsed;
+
         return Scaffold(
           body: Row(
             children: [
               AdminSidebar(
                 currentPath: widget.currentPath,
-                isCollapsed: _isCollapsed,
+                isCollapsed: effectiveCollapsed,
                 onToggleCollapse: _toggleCollapse,
               ),
               Expanded(
@@ -108,7 +120,9 @@ class _AdminShellState extends ConsumerState<AdminShell> {
                     Expanded(
                       child: Center(
                         child: ConstrainedBox(
-                          constraints: const BoxConstraints(maxWidth: 1600),
+                          constraints: const BoxConstraints(
+                            maxWidth: ResponsiveBreakpoints.maxContentWidth,
+                          ),
                           child: widget.child,
                         ),
                       ),

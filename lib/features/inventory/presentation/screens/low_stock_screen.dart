@@ -26,42 +26,44 @@ class LowStockScreen extends ConsumerWidget {
       context: context,
       builder: (ctx) => AlertDialog(
         title: Text('Restock: ${balance.materialName}'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text('SKU: ${balance.materialSku}', style: AppTextStyles.labelMedium),
-            const SizedBox(height: 4),
-            Text(
-              'Current: ${balance.formattedCurrent} ${balance.unit} (Min: ${balance.formattedMinimumStock} ${balance.unit})',
-              style: AppTextStyles.bodySmall.copyWith(color: AppColors.error, fontWeight: FontWeight.w600),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: qtyController,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              decoration: InputDecoration(
-                labelText: 'Received Quantity (${balance.unit})',
-                prefixIcon: const Icon(Icons.add_shopping_cart_rounded),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text('SKU: ${balance.materialSku}', style: AppTextStyles.labelMedium),
+              const SizedBox(height: 4),
+              Text(
+                'Current: ${balance.formattedCurrent} ${balance.unit} (Min: ${balance.formattedMinimumStock} ${balance.unit})',
+                style: AppTextStyles.bodySmall.copyWith(color: AppColors.error, fontWeight: FontWeight.w600),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: refController,
-              decoration: const InputDecoration(
-                labelText: 'PO / Supplier Invoice Ref',
-                prefixIcon: Icon(Icons.receipt_rounded),
+              const SizedBox(height: 16),
+              TextField(
+                controller: qtyController,
+                keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                decoration: InputDecoration(
+                  labelText: 'Received Quantity (${balance.unit})',
+                  prefixIcon: const Icon(Icons.add_shopping_cart_rounded),
+                ),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: notesController,
-              decoration: const InputDecoration(
-                labelText: 'Notes',
-                prefixIcon: Icon(Icons.note_alt_outlined),
+              const SizedBox(height: 12),
+              TextField(
+                controller: refController,
+                decoration: const InputDecoration(
+                  labelText: 'PO / Supplier Invoice Ref',
+                  prefixIcon: Icon(Icons.receipt_rounded),
+                ),
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              TextField(
+                controller: notesController,
+                decoration: const InputDecoration(
+                  labelText: 'Notes',
+                  prefixIcon: Icon(Icons.note_alt_outlined),
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
@@ -186,10 +188,15 @@ class LowStockScreen extends ConsumerWidget {
                               ],
                             ),
                           ),
-                          const Spacer(),
-                          Text(
-                            balance.locationName,
-                            style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                          const SizedBox(width: 8),
+                          Flexible(
+                            child: Text(
+                              balance.locationName,
+                              style: AppTextStyles.bodySmall.copyWith(color: AppColors.textSecondary),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.end,
+                            ),
                           ),
                         ],
                       ),

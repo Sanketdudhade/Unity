@@ -46,64 +46,68 @@ class AdminSidebar extends ConsumerWidget {
           ),
         ),
       ),
-      child: Column(
-        children: [
-          // 1. Sidebar Brand Header
-          _buildBrandHeader(context, isCollapsed),
+      child: SafeArea(
+        top: isDrawer,
+        bottom: isDrawer,
+        child: Column(
+          children: [
+            // 1. Sidebar Brand Header
+            _buildBrandHeader(context, isCollapsed),
 
-          const Divider(color: Color(0xFF1E2D4A), height: 1),
+            const Divider(color: Color(0xFF1E2D4A), height: 1),
 
-          // 2. Navigation Items (Grouped)
-          Expanded(
-            child: ListView(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              children: [
-                for (final group in groups) ...[
-                  if (!isCollapsed)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
-                      child: Text(
-                        group.toUpperCase(),
-                        style: const TextStyle(
-                          color: Color(0xFF64748B),
-                          fontSize: 10,
-                          fontWeight: FontWeight.w700,
-                          letterSpacing: 1.1,
+            // 2. Navigation Items (Grouped)
+            Expanded(
+              child: ListView(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                children: [
+                  for (final group in groups) ...[
+                    if (!isCollapsed)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 6),
+                        child: Text(
+                          group.toUpperCase(),
+                          style: const TextStyle(
+                            color: Color(0xFF64748B),
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                            letterSpacing: 1.1,
+                          ),
                         ),
                       ),
-                    ),
-                  ...AdminNavDestination.all
-                      .where((d) => d.group == group)
-                      .map((dest) {
-                    final isSelected = currentPath.startsWith(dest.route);
-                    final badge = (dest.hasBadge && lowStockCount > 0)
-                        ? lowStockCount
-                        : null;
+                    ...AdminNavDestination.all
+                        .where((d) => d.group == group)
+                        .map((dest) {
+                      final isSelected = currentPath.startsWith(dest.route);
+                      final badge = (dest.hasBadge && lowStockCount > 0)
+                          ? lowStockCount
+                          : null;
 
-                    return _NavItemTile(
-                      destination: dest,
-                      isSelected: isSelected,
-                      isCollapsed: isCollapsed,
-                      badgeCount: badge,
-                      onTap: () {
-                        final router = GoRouter.of(context);
-                        if (isDrawer) Navigator.of(context).pop();
-                        if (currentPath != dest.route) {
-                          router.go(dest.route);
-                        }
-                      },
-                    );
-                  }),
+                      return _NavItemTile(
+                        destination: dest,
+                        isSelected: isSelected,
+                        isCollapsed: isCollapsed,
+                        badgeCount: badge,
+                        onTap: () {
+                          final router = GoRouter.of(context);
+                          if (isDrawer) Navigator.of(context).pop();
+                          if (currentPath != dest.route) {
+                            router.go(dest.route);
+                          }
+                        },
+                      );
+                    }),
+                  ],
                 ],
-              ],
+              ),
             ),
-          ),
 
-          const Divider(color: Color(0xFF1E2D4A), height: 1),
+            const Divider(color: Color(0xFF1E2D4A), height: 1),
 
-          // 3. Bottom Footer (Theme Switcher, Profile & Sign Out)
-          _buildFooter(context, ref, user, themeMode, isCollapsed),
-        ],
+            // 3. Bottom Footer (Theme Switcher, Profile & Sign Out)
+            _buildFooter(context, ref, user, themeMode, isCollapsed),
+          ],
+        ),
       ),
     );
   }
@@ -134,6 +138,11 @@ class AdminSidebar extends ConsumerWidget {
             child: Image.asset(
               'assets/icons/app_icon.png',
               fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const Icon(
+                Icons.precision_manufacturing_rounded,
+                color: Color(0xFF2DD4BF),
+                size: 20,
+              ),
             ),
           ),
           if (!isCollapsed) ...[

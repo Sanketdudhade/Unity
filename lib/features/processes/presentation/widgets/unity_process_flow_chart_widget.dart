@@ -3,12 +3,19 @@ import 'package:unity/app/theme/app_colors.dart';
 import 'package:unity/features/processes/data/models/process_step_model.dart';
 import 'package:unity/features/processes/data/models/process_template_model.dart';
 import 'package:unity/features/production/data/models/order_process_model.dart';
+import 'package:unity/features/production/data/models/production_workflows.dart';
 
 /// Interactive, high-fidelity visual rendering of the official:
-/// UNITY ENGINEERS - PROCESS FLOW CHART PLAN (17 Stages)
+/// UNITY ENGINEERS - PROCESS FLOW CHART PLAN (Cutting, Non-Cutting, or 17 Stages)
 class UnityProcessFlowChartWidget extends StatelessWidget {
   /// Optional list of live order stages to display live execution status
   final List<OrderProcessModel>? liveOrderStages;
+
+  /// Optional production type ('CUTTING' or 'NON-CUTTING') to select workflow
+  final String? productionType;
+
+  /// Optional custom stages to override defaults
+  final List<ProcessStepModel>? customStages;
 
   /// Optional callback when a stage node is tapped
   final void Function(int sequence, String name)? onStageTap;
@@ -28,6 +35,8 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
   const UnityProcessFlowChartWidget({
     super.key,
     this.liveOrderStages,
+    this.productionType,
+    this.customStages,
     this.onStageTap,
     this.onAssignEmployee,
     this.onAssignAllStages,
@@ -37,7 +46,24 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final stages = ProcessTemplateModel.default17Stages();
+    final List<ProcessStepModel> stages;
+    final pType = productionType;
+    if (customStages != null && customStages!.isNotEmpty) {
+      stages = customStages!;
+    } else if (pType != null && pType.isNotEmpty) {
+      stages = ProductionWorkflows.getStages(pType);
+    } else if (liveOrderStages != null && liveOrderStages!.isNotEmpty) {
+      stages = liveOrderStages!.map((p) => ProcessStepModel(
+        id: p.templateStepId.isNotEmpty ? p.templateStepId : 'step_${p.sequence}',
+        sequence: p.sequence,
+        name: p.name,
+        defaultDurationHours: 4,
+        dependsOnStepSequence: p.dependsOnStepSequence,
+      )).toList()..sort((a, b) => a.sequence.compareTo(b.sequence));
+    } else {
+      stages = ProcessTemplateModel.default17Stages();
+    }
+
     final isDesktop = MediaQuery.sizeOf(context).width >= 900;
 
     return Container(
@@ -59,12 +85,12 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           if (showHeader) ...[
-            _buildCompanyHeader(),
+            _buildCompanyHeader(productionType: productionType, stageCount: stages.length),
             const SizedBox(height: 20),
             const Divider(height: 1, color: AppColors.border),
             const SizedBox(height: 16),
           ],
-          _buildStatusLegend(stages),
+          _buildStatusLegend(context, stages),
           const SizedBox(height: 20),
           if (isDesktop)
             _buildDesktopSerpentineFlow(context, stages)
@@ -75,7 +101,7 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildStatusLegend(List<ProcessStepModel> stages) {
+  Widget _buildStatusLegend(BuildContext context, List<ProcessStepModel> stages) {
     int doneCount = 0;
     int workingCount = 0;
     int pendingCount = 0;
@@ -124,6 +150,8 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
       ],
     );
 
+    final isNarrow = MediaQuery.sizeOf(context).width < 500;
+
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
@@ -132,24 +160,43 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
         border: Border.all(color: AppColors.border),
       ),
       child: canAssign && onAssignAllStages != null
-          ? Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(child: Align(alignment: Alignment.centerLeft, child: legendWrap)),
-                ElevatedButton.icon(
-                  icon: const Icon(Icons.assignment_ind_outlined, size: 14),
-                  label: const Text('Assign Stages'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF0F766E),
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    visualDensity: VisualDensity.compact,
-                    textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
-                  ),
-                  onPressed: onAssignAllStages,
-                ),
-              ],
-            )
+          ? (isNarrow
+              ? Column(
+                  children: [
+                    legendWrap,
+                    const SizedBox(height: 8),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.assignment_ind_outlined, size: 14),
+                      label: const Text('Assign Stages'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F766E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        visualDensity: VisualDensity.compact,
+                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      onPressed: onAssignAllStages,
+                    ),
+                  ],
+                )
+              : Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(child: Align(alignment: Alignment.centerLeft, child: legendWrap)),
+                    ElevatedButton.icon(
+                      icon: const Icon(Icons.assignment_ind_outlined, size: 14),
+                      label: const Text('Assign Stages'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF0F766E),
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        visualDensity: VisualDensity.compact,
+                        textStyle: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      onPressed: onAssignAllStages,
+                    ),
+                  ],
+                ))
           : Center(child: legendWrap),
     );
   }
@@ -209,36 +256,48 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
     );
   }
 
-  Widget _buildCompanyHeader() {
+  Widget _buildCompanyHeader({String? productionType, int stageCount = 0}) {
+    final String titleText;
+    if (productionType != null && productionType.isNotEmpty) {
+      titleText = 'PROCESS FLOW CHART PLAN: ${ProductionWorkflows.getLabel(productionType).toUpperCase()} ($stageCount STAGES):-';
+    } else if (stageCount > 0 && stageCount != 17) {
+      titleText = 'PROCESS FLOW CHART PLAN ($stageCount STAGES):-';
+    } else {
+      titleText = 'PROCESS FLOW CHART PLAN:-';
+    }
+
     return Column(
       children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1565C0),
-                borderRadius: BorderRadius.circular(8),
+        FittedBox(
+          fit: BoxFit.scaleDown,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1565C0),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(
+                  Icons.precision_manufacturing_rounded,
+                  color: Colors.white,
+                  size: 24,
+                ),
               ),
-              child: const Icon(
-                Icons.precision_manufacturing_rounded,
-                color: Colors.white,
-                size: 24,
+              const SizedBox(width: 12),
+              const Text(
+                'UNITY ENGINEERS',
+                style: TextStyle(
+                  fontSize: 26,
+                  fontWeight: FontWeight.w900,
+                  letterSpacing: 2.5,
+                  color: Color(0xFF0D47A1),
+                  fontFamily: 'serif',
+                ),
               ),
-            ),
-            const SizedBox(width: 12),
-            const Text(
-              'UNITY ENGINEERS',
-              style: TextStyle(
-                fontSize: 26,
-                fontWeight: FontWeight.w900,
-                letterSpacing: 2.5,
-                color: Color(0xFF0D47A1),
-                fontFamily: 'serif',
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 6),
         Container(
@@ -250,6 +309,7 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
           child: const Text(
             'B-15/2/61, MIDC, WALUJ, AURANGABAD, M.H. INDIA. 431136',
             textAlign: TextAlign.center,
+            softWrap: true,
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w700,
@@ -262,26 +322,34 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
         Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Container(
-              height: 2,
-              width: 32,
-              color: const Color(0xFFD32F2F),
-            ),
-            const SizedBox(width: 8),
-            const Text(
-              'PROCESS FLOW CHART PLAN:-',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.w900,
-                color: Color(0xFFD32F2F),
-                letterSpacing: 1.5,
+            Expanded(
+              child: Container(
+                height: 2,
+                color: const Color(0xFFD32F2F),
               ),
             ),
             const SizedBox(width: 8),
-            Container(
-              height: 2,
-              width: 32,
-              color: const Color(0xFFD32F2F),
+            Flexible(
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
+                child: Text(
+                  titleText,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w900,
+                    color: Color(0xFFD32F2F),
+                    letterSpacing: 1.2,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Container(
+                height: 2,
+                color: const Color(0xFFD32F2F),
+              ),
             ),
           ],
         ),
@@ -289,32 +357,47 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
     );
   }
 
-  /// Builds the 3-row serpentine flow matching the company's chart
+  /// Builds a responsive serpentine flow matching the company's chart layout
   Widget _buildDesktopSerpentineFlow(
     BuildContext context,
     List<ProcessStepModel> stages,
   ) {
-    // Row 1: Steps 1 to 6 (left to right)
-    final row1 = stages.sublist(0, 6);
-    // Row 2: Steps 7 to 12 (right to left)
-    final row2 = stages.sublist(6, 12);
-    // Row 3: Steps 13 to 17 (left to right)
-    final row3 = stages.sublist(12, 17);
+    if (stages.isEmpty) return const SizedBox.shrink();
 
-    return Column(
-      children: [
-        // Row 1
-        _buildRow(row1, isReversed: false),
-        _buildVerticalConnector(alignRight: true),
+    // Determine target items per row (5 for <=15 stages, 6 for 16+ stages)
+    final int itemsPerRow;
+    if (stages.length <= 8) {
+      itemsPerRow = 4;
+    } else if (stages.length <= 15) {
+      itemsPerRow = 5;
+    } else {
+      itemsPerRow = 6;
+    }
 
-        // Row 2
-        _buildRow(row2, isReversed: true),
-        _buildVerticalConnector(alignRight: false),
+    final List<List<ProcessStepModel>> rows = [];
+    for (int i = 0; i < stages.length; i += itemsPerRow) {
+      final end = (i + itemsPerRow < stages.length) ? i + itemsPerRow : stages.length;
+      rows.add(stages.sublist(i, end));
+    }
 
-        // Row 3
-        _buildRow(row3, isReversed: false, fillEmptySlots: 1),
-      ],
-    );
+    final children = <Widget>[];
+    for (int r = 0; r < rows.length; r++) {
+      final isEven = r % 2 == 0; // Row 0 (L->R), Row 1 (R->L), Row 2 (L->R)...
+      final rowSteps = rows[r];
+      final fillSlots = itemsPerRow - rowSteps.length;
+
+      children.add(_buildRow(
+        rowSteps,
+        isReversed: !isEven,
+        fillEmptySlots: fillSlots > 0 ? fillSlots : 0,
+      ));
+
+      if (r < rows.length - 1) {
+        children.add(_buildVerticalConnector(alignRight: isEven));
+      }
+    }
+
+    return Column(children: children);
   }
 
   Widget _buildRow(
@@ -327,6 +410,12 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
+        if (isReversed) ...[
+          for (int i = 0; i < fillEmptySlots; i++) ...[
+            const Spacer(),
+            const SizedBox(width: 28),
+          ],
+        ],
         for (int i = 0; i < displaySteps.length; i++) ...[
           Expanded(
             child: _buildStageNode(displaySteps[i]),
@@ -341,9 +430,11 @@ class UnityProcessFlowChartWidget extends StatelessWidget {
               ),
             ),
         ],
-        for (int i = 0; i < fillEmptySlots; i++) ...[
-          const SizedBox(width: 28),
-          const Spacer(),
+        if (!isReversed) ...[
+          for (int i = 0; i < fillEmptySlots; i++) ...[
+            const SizedBox(width: 28),
+            const Spacer(),
+          ],
         ],
       ],
     );

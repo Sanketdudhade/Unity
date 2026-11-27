@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'sub_process_model.dart';
 
 /// Represents a single process stage within a production order, snapshotted from a template.
 class OrderProcessModel {
@@ -19,6 +20,8 @@ class OrderProcessModel {
   final String? approvedBy;
   final String reworkReason;
   final String notes;
+  final List<String> selectedBomItemIds;
+  final List<SubProcessModel> subProcesses;
   final DateTime? createdAt;
   final DateTime? updatedAt;
 
@@ -40,6 +43,8 @@ class OrderProcessModel {
     this.approvedBy,
     this.reworkReason = '',
     this.notes = '',
+    this.selectedBomItemIds = const [],
+    this.subProcesses = const [],
     this.createdAt,
     this.updatedAt,
   });
@@ -52,6 +57,9 @@ class OrderProcessModel {
   bool get isCompleted => status == 'COMPLETED';
   bool get isReworkRequired => status == 'REWORK_REQUIRED';
   bool get isCancelled => status == 'CANCELLED';
+
+  /// Manufacturing stages from Step 4 to Step 11 allow modular sub-process definition & operator assignment.
+  bool get allowsSubProcesses => sequence >= 4 && sequence <= 11;
 
   double get progressPercentage {
     if (targetQty <= 0) return 0.0;
@@ -108,6 +116,14 @@ class OrderProcessModel {
       approvedBy: data['approvedBy'] as String?,
       reworkReason: data['reworkReason'] as String? ?? '',
       notes: data['notes'] as String? ?? '',
+      selectedBomItemIds: (data['selectedBomItemIds'] as List<dynamic>?)
+              ?.map((e) => e.toString())
+              .toList() ??
+          const [],
+      subProcesses: (data['subProcesses'] as List<dynamic>?)
+              ?.map((e) => SubProcessModel.fromMap(Map<String, dynamic>.from(e as Map)))
+              .toList() ??
+          const [],
       createdAt: parseDate(data['createdAt']),
       updatedAt: parseDate(data['updatedAt']),
     );
@@ -131,6 +147,8 @@ class OrderProcessModel {
       'approvedBy': approvedBy,
       'reworkReason': reworkReason.trim(),
       'notes': notes.trim(),
+      'selectedBomItemIds': selectedBomItemIds,
+      'subProcesses': subProcesses.map((e) => e.toMap()).toList(),
       'createdAt': createdAt != null ? Timestamp.fromDate(createdAt!) : FieldValue.serverTimestamp(),
       'updatedAt': FieldValue.serverTimestamp(),
     };
@@ -154,6 +172,8 @@ class OrderProcessModel {
     String? approvedBy,
     String? reworkReason,
     String? notes,
+    List<String>? selectedBomItemIds,
+    List<SubProcessModel>? subProcesses,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -175,6 +195,8 @@ class OrderProcessModel {
       approvedBy: approvedBy ?? this.approvedBy,
       reworkReason: reworkReason ?? this.reworkReason,
       notes: notes ?? this.notes,
+      selectedBomItemIds: selectedBomItemIds ?? this.selectedBomItemIds,
+      subProcesses: subProcesses ?? this.subProcesses,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );

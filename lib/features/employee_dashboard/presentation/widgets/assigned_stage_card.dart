@@ -6,6 +6,8 @@ import 'package:unity/features/production/data/models/order_process_model.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
 import 'package:unity/features/production/presentation/providers/production_providers.dart';
 import 'package:unity/features/production/presentation/widgets/process_stage_actions_dialog.dart';
+import 'package:unity/features/production/presentation/widgets/stage_sub_processes_dialog.dart';
+import 'package:unity/features/production/presentation/widgets/jobwork_po_dialog.dart';
 import 'package:unity/features/tasks/presentation/widgets/update_task_status_dialog.dart';
 
 /// Modern Enterprise card representing an assigned manufacturing process stage.
@@ -153,14 +155,14 @@ class AssignedStageCard extends ConsumerWidget {
 
           const SizedBox(height: 8),
 
-          // 2. Order Number & Product Info
+          // 2. Order Number, Workflow Type & Product Info
           Row(
             children: [
               Icon(Icons.inventory_2_outlined, size: 14, color: textSecondary),
               const SizedBox(width: 4),
               Expanded(
                 child: Text(
-                  '${targetOrder.orderNumber} • ${targetOrder.productName}',
+                  '${targetOrder.orderNumber} • ${targetOrder.productName} • ${targetOrder.isCutting ? "CUTTING" : "NON-CUTTING"}',
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w500,
@@ -236,6 +238,161 @@ class AssignedStageCard extends ConsumerWidget {
             ),
           ],
 
+          // 4b. Allocated Sub-Processes (Steps 4 to 11)
+          if (stage.subProcesses.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? const Color(0xFF1E2B41).withValues(alpha: 0.5) : const Color(0xFFF8FAFC),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: const Color(0xFF6366F1).withValues(alpha: 0.3)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(Icons.account_tree_rounded, size: 15, color: Color(0xFF6366F1)),
+                      const SizedBox(width: 6),
+                      Text(
+                        'Allocated Sub-Processes (${stage.subProcesses.length})',
+                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                      ),
+                      const Spacer(),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          visualDensity: VisualDensity.compact,
+                          padding: EdgeInsets.zero,
+                        ),
+                        onPressed: () {
+                          showDialog(
+                            context: context,
+                            builder: (_) => StageSubProcessesDialog(
+                              order: targetOrder,
+                              process: stage.orderId.isNotEmpty ? stage : stage.copyWith(orderId: targetOrder.id),
+                            ),
+                          );
+                        },
+                        child: const Text('View All', style: TextStyle(fontSize: 11)),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  ...stage.subProcesses.map((sp) {
+                    final isMySubProcess = user != null && sp.assignedEmployeeUid.trim() == user.uid.trim();
+
+                    return Container(
+                      margin: const EdgeInsets.only(top: 6),
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                      decoration: BoxDecoration(
+                        color: isDark ? const Color(0xFF152235) : Colors.white,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                          color: isMySubProcess
+                              ? const Color(0xFF6366F1).withValues(alpha: 0.5)
+                              : (isDark ? const Color(0xFF304155) : const Color(0xFFE2E8F0)),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Text(
+                                      sp.title,
+                                      style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                    ),
+                                    if (isMySubProcess) ...[
+                                      const SizedBox(width: 6),
+                                      Container(
+                                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                                        decoration: BoxDecoration(
+                                          color: Colors.green.withValues(alpha: 0.15),
+                                          borderRadius: BorderRadius.circular(4),
+                                        ),
+                                        child: const Text('You', style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.green)),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                Text(
+                                  'Assigned: ${sp.assignedEmployeeName} • Status: ${sp.status.replaceAll('_', ' ')}',
+                                  style: TextStyle(fontSize: 10.5, color: textSecondary),
+                                ),
+                              ],
+                            ),
+                          ),
+                          if (isMySubProcess || (user?.role.isAdmin ?? false)) ...[
+                            if (sp.isNotStarted || sp.status == 'ASSIGNED')
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF0F766E),
+                                  foregroundColor: Colors.white,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.play_arrow_rounded, size: 14),
+                                label: const Text('Start Working', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                                onPressed: () async {
+                                  try {
+                                    await ref.read(productionRepositoryProvider).updateSubProcessStatus(
+                                          orgId: user?.organizationId ?? '',
+                                          orderId: stage.orderId.isNotEmpty ? stage.orderId : targetOrder.id,
+                                          processId: stage.id,
+                                          subProcessId: sp.id,
+                                          newStatus: 'IN_PROGRESS',
+                                        );
+                                    ref.invalidate(employeeAssignedProcessesStreamProvider);
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Cannot start sub-process: $e')),
+                                    );
+                                  }
+                                },
+                              )
+                            else if (sp.isInProgress)
+                              ElevatedButton.icon(
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: tokens.success,
+                                  foregroundColor: Colors.white,
+                                  visualDensity: VisualDensity.compact,
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                ),
+                                icon: const Icon(Icons.check_circle_outline_rounded, size: 14),
+                                label: const Text('Mark Done', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700)),
+                                onPressed: () async {
+                                  try {
+                                    await ref.read(productionRepositoryProvider).updateSubProcessStatus(
+                                          orgId: user?.organizationId ?? '',
+                                          orderId: stage.orderId.isNotEmpty ? stage.orderId : targetOrder.id,
+                                          processId: stage.id,
+                                          subProcessId: sp.id,
+                                          newStatus: 'COMPLETED',
+                                        );
+                                    ref.invalidate(employeeAssignedProcessesStreamProvider);
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(content: Text('Cannot complete sub-process: $e')),
+                                    );
+                                  }
+                                },
+                              )
+                            else if (sp.isCompleted)
+                              const Icon(Icons.check_circle_rounded, size: 18, color: Colors.green),
+                          ],
+                        ],
+                      ),
+                    );
+                  }),
+                ],
+              ),
+            ),
+          ],
+
           const SizedBox(height: 14),
 
           // 5. Action Buttons Row
@@ -244,6 +401,64 @@ class AssignedStageCard extends ConsumerWidget {
             runSpacing: 8,
             alignment: WrapAlignment.end,
             children: [
+              if (stage.sequence >= 4 && stage.sequence <= 11)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (_) => StageSubProcessesDialog(
+                        order: targetOrder,
+                        process: stage.orderId.isNotEmpty ? stage : stage.copyWith(orderId: targetOrder.id),
+                      ),
+                    );
+                  },
+                  icon: const Icon(Icons.account_tree_rounded, size: 14, color: Color(0xFF6366F1)),
+                  label: Text(
+                    stage.subProcesses.isEmpty
+                        ? 'Sub-Processes'
+                        : 'Sub-Processes (${stage.subProcesses.length})',
+                    style: const TextStyle(color: Color(0xFF6366F1)),
+                  ),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF6366F1)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              if (stage.sequence == 4)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    JobworkPoDialog.show(
+                      context,
+                      order: targetOrder,
+                      process: stage.orderId.isNotEmpty ? stage : stage.copyWith(orderId: targetOrder.id),
+                    );
+                  },
+                  icon: const Icon(Icons.request_quote_rounded, size: 14, color: Color(0xFFEA580C)),
+                  label: const Text('Jobwork PO', style: TextStyle(color: Color(0xFFEA580C))),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFFEA580C)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
+              if (stage.name.toUpperCase().contains('VMC') || stage.sequence == 9)
+                OutlinedButton.icon(
+                  onPressed: () {
+                    JobworkPoDialog.show(
+                      context,
+                      order: targetOrder,
+                      process: stage.orderId.isNotEmpty ? stage : stage.copyWith(orderId: targetOrder.id),
+                    );
+                  },
+                  icon: const Icon(Icons.receipt_long_rounded, size: 14, color: Color(0xFF0F766E)),
+                  label: const Text('VMC PO', style: TextStyle(color: Color(0xFF0F766E))),
+                  style: OutlinedButton.styleFrom(
+                    side: const BorderSide(color: Color(0xFF0F766E)),
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+                  ),
+                ),
               if (stage.isNotStarted || stage.status == 'ASSIGNED')
                 ElevatedButton.icon(
                   onPressed: () async {

@@ -154,14 +154,15 @@ class _ConsumeMaterialScreenState extends ConsumerState<ConsumeMaterialScreen> {
                   // Transaction Type Selector
                   DropdownButtonFormField<String>(
                     initialValue: _transactionType,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Operation Type',
                       prefixIcon: Icon(Icons.swap_horiz_rounded),
                     ),
                     items: const [
-                      DropdownMenuItem(value: 'ISSUE', child: Text('Issue to Shop Floor (Consumption)')),
-                      DropdownMenuItem(value: 'ALLOCATION', child: Text('Reserve / Allocate for Order')),
-                      DropdownMenuItem(value: 'SCRAP', child: Text('Write-off Scrap / Damage')),
+                      DropdownMenuItem(value: 'ISSUE', child: Text('Issue to Shop Floor (Consumption)', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'ALLOCATION', child: Text('Reserve / Allocate for Order', overflow: TextOverflow.ellipsis)),
+                      DropdownMenuItem(value: 'SCRAP', child: Text('Write-off Scrap / Damage', overflow: TextOverflow.ellipsis)),
                     ],
                     onChanged: (val) {
                       if (val != null) setState(() => _transactionType = val);
@@ -172,6 +173,7 @@ class _ConsumeMaterialScreenState extends ConsumerState<ConsumeMaterialScreen> {
                   // Material Selector
                   DropdownButtonFormField<StockBalanceModel>(
                     initialValue: _selectedBalance,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Select Material *',
                       prefixIcon: Icon(Icons.category_rounded),
@@ -179,7 +181,7 @@ class _ConsumeMaterialScreenState extends ConsumerState<ConsumeMaterialScreen> {
                     items: balances.map((b) {
                       return DropdownMenuItem<StockBalanceModel>(
                         value: b,
-                        child: Text('${b.materialName} (${b.materialSku})'),
+                        child: Text('${b.materialName} (${b.materialSku})', overflow: TextOverflow.ellipsis),
                       );
                     }).toList(),
                     onChanged: (val) => setState(() => _selectedBalance = val),

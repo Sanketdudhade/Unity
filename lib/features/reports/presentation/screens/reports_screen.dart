@@ -128,13 +128,37 @@ class ReportsScreen extends ConsumerWidget {
                             ],
                           ),
                           const SizedBox(height: 16),
-                          Row(
-                            children: [
-                              _ExecutiveStat(label: 'Workforce', value: '$employeeCount'),
-                              _ExecutiveStat(label: 'Materials', value: '$inventoryCount'),
-                              _ExecutiveStat(label: 'Active Orders', value: '$activeOrdersCount'),
-                              _ExecutiveStat(label: 'Open Tickets', value: '$openQueriesCount', isAlert: openQueriesCount > 0),
-                            ],
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final isNarrow = constraints.maxWidth < 450;
+                              if (isNarrow) {
+                                return Column(
+                                  children: [
+                                    Row(
+                                      children: [
+                                        _ExecutiveStat(label: 'Workforce', value: '$employeeCount'),
+                                        _ExecutiveStat(label: 'Materials', value: '$inventoryCount'),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      children: [
+                                        _ExecutiveStat(label: 'Active Orders', value: '$activeOrdersCount'),
+                                        _ExecutiveStat(label: 'Open Tickets', value: '$openQueriesCount', isAlert: openQueriesCount > 0),
+                                      ],
+                                    ),
+                                  ],
+                                );
+                              }
+                              return Row(
+                                children: [
+                                  _ExecutiveStat(label: 'Workforce', value: '$employeeCount'),
+                                  _ExecutiveStat(label: 'Materials', value: '$inventoryCount'),
+                                  _ExecutiveStat(label: 'Active Orders', value: '$activeOrdersCount'),
+                                  _ExecutiveStat(label: 'Open Tickets', value: '$openQueriesCount', isAlert: openQueriesCount > 0),
+                                ],
+                              );
+                            },
                           ),
                         ],
                       ),

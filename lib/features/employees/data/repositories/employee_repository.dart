@@ -119,6 +119,29 @@ class EmployeeRepository {
       throw DatabaseException('Failed to update employee status: ${e.message}', code: e.code);
     }
   }
+
+  /// Deletes an employee user from Firestore (both `users/{uid}` and `organizations/{orgId}/employees/{uid}`).
+  Future<void> deleteEmployee({
+    required String uid,
+    required String organizationId,
+  }) async {
+    try {
+      final batch = firestore.batch();
+      final userDocRef = firestore.collection(FirestorePaths.usersCollection).doc(uid);
+      batch.delete(userDocRef);
+
+      if (organizationId.isNotEmpty) {
+        final empDocRef = firestore
+            .collection(FirestorePaths.employeesCollection(organizationId))
+            .doc(uid);
+        batch.delete(empDocRef);
+      }
+
+      await batch.commit();
+    } on FirebaseException catch (e) {
+      throw DatabaseException('Failed to delete employee: ${e.message}', code: e.code);
+    }
+  }
 }
 
 

@@ -6,6 +6,7 @@ import 'package:unity/core/constants/app_enums.dart';
 import 'package:unity/features/admin_dashboard/presentation/screens/admin_dashboard_screen.dart';
 import 'package:unity/features/auth/presentation/providers/auth_provider.dart';
 import 'package:unity/features/auth/presentation/screens/login_screen.dart';
+import 'package:unity/features/auth/presentation/screens/forgot_password_screen.dart';
 import 'package:unity/features/auth/presentation/screens/splash_screen.dart';
 import 'package:unity/features/employee_dashboard/presentation/screens/employee_dashboard_screen.dart';
 import 'package:unity/features/employees/presentation/screens/employee_list_screen.dart';
@@ -16,6 +17,9 @@ import 'package:unity/features/products/presentation/screens/product_list_screen
 import 'package:unity/features/profile/presentation/screens/profile_screen.dart';
 import 'package:unity/features/reports/presentation/screens/reports_screen.dart';
 import 'package:unity/features/admin_dashboard/presentation/shell/admin_shell.dart';
+import 'package:unity/features/billing/presentation/screens/billing_dashboard_screen.dart';
+import 'package:unity/features/billing/presentation/screens/invoice_create_edit_screen.dart';
+import 'package:unity/features/billing/presentation/screens/invoice_details_screen.dart';
 
 /// Listenable bridge allowing GoRouter to respond reactively to Riverpod auth state updates.
 class RouterNotifier extends ChangeNotifier {
@@ -48,27 +52,28 @@ final routerProvider = Provider<GoRouter>((ref) {
 
       final isSplash = location == RouteNames.splash;
       final isLogin = location == RouteNames.login;
+      final isForgotPassword = location == RouteNames.forgotPassword;
 
       // 1. Initializing: stay on splash
       if (status == AuthStatus.initial) {
         return isSplash ? null : RouteNames.splash;
       }
 
-      // 2. Unauthenticated: always navigate to login
+      // 2. Unauthenticated: allow login or forgot password
       if (status == AuthStatus.unauthenticated) {
-        return isLogin ? null : RouteNames.login;
+        return (isLogin || isForgotPassword) ? null : RouteNames.login;
       }
 
       // 3. Inactive or Error state:
       if (status == AuthStatus.inactive || status == AuthStatus.error) {
-        // Allow splash to show the error message card, or stay on login
-        if (isSplash || isLogin) return null;
+        // Allow splash to show the error message card, or stay on login / forgot-password
+        if (isSplash || isLogin || isForgotPassword) return null;
         return RouteNames.login;
       }
 
       // 4. Authenticated: navigate to role-specific dashboard
       if (authState.isAuthenticated && user != null) {
-        if (isSplash || isLogin) {
+        if (isSplash || isLogin || isForgotPassword) {
           return user.role.isAdmin
               ? RouteNames.adminDashboard
               : RouteNames.employeeDashboard;
@@ -89,8 +94,8 @@ final routerProvider = Provider<GoRouter>((ref) {
         return null;
       }
 
-      // Default fallback: send unauthenticated users to login
-      return isLogin ? null : RouteNames.login;
+      // Default fallback: send unauthenticated users to login (or allow forgot password)
+      return (isLogin || isForgotPassword) ? null : RouteNames.login;
     },
     routes: [
       GoRoute(
@@ -100,6 +105,11 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(
         path: RouteNames.login,
         builder: (context, state) => const LoginScreen(),
+      ),
+      GoRoute(
+        path: RouteNames.forgotPassword,
+        name: RouteNames.forgotPassword,
+        builder: (context, state) => const ForgotPasswordScreen(),
       ),
       GoRoute(
         path: RouteNames.employeeDashboard,
@@ -140,6 +150,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(
             path: RouteNames.adminReports,
             builder: (context, state) => const ReportsScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminBilling,
+            name: RouteNames.adminBilling,
+            builder: (context, state) => const BillingDashboardScreen(),
+          ),
+          GoRoute(
+            path: RouteNames.adminBillingCreate,
+            name: RouteNames.adminBillingCreate,
+            builder: (context, state) {
+              final editId = state.uri.queryParameters['editId'];
+              return InvoiceCreateEditScreen(invoiceId: editId);
+            },
+          ),
+          GoRoute(
+            path: RouteNames.adminBillingDetails,
+            name: RouteNames.adminBillingDetails,
+            builder: (context, state) {
+              final id = state.pathParameters['id'] ?? '';
+              return InvoiceDetailsScreen(invoiceId: id);
+            },
           ),
           GoRoute(
             path: RouteNames.profile,

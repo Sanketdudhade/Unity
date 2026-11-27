@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,6 +16,7 @@ import 'package:unity/features/processes/presentation/providers/process_template
 import 'package:unity/features/products/data/models/product_model.dart';
 import 'package:unity/features/products/presentation/providers/product_providers.dart';
 import 'package:unity/features/production/data/models/production_order_model.dart';
+import 'package:unity/features/production/data/models/production_workflows.dart';
 import 'package:unity/features/production/presentation/providers/production_providers.dart';
 import 'package:unity/features/production/presentation/screens/production_details_screen.dart';
 
@@ -55,7 +57,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
     final formKey = GlobalKey<FormState>();
 
     ProductModel? selectedProduct = preselectedProduct;
-    ProcessTemplateModel? selectedTemplate;
+    String selectedProductionType = ProductionWorkflows.cutting;
     String? selectedEmployeeUid;
     String? selectedEmployeeName;
     final Map<int, ({String uid, String name})> stageAssignments = {};
@@ -173,40 +175,210 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                         ),
                         const SizedBox(height: 12),
 
-                        // Template Selector
-                        templatesAsync.when(
-                          loading: () => const LinearProgressIndicator(),
-                          error: (e, _) => Text('Error loading workflows: $e', style: TextStyle(color: tokens.danger)),
-                          data: (templates) {
-                            if (templates.isNotEmpty && selectedTemplate == null) {
-                              selectedTemplate = templates.first;
-                            }
-                            return DropdownButtonFormField<ProcessTemplateModel>(
-                              initialValue: selectedTemplate,
-                              isExpanded: true,
-                              decoration: const InputDecoration(
-                                labelText: 'Manufacturing Process Route (Stages) *',
-                                prefixIcon: Icon(Icons.account_tree_outlined),
-                              ),
-                              items: templates.map((t) {
-                                return DropdownMenuItem<ProcessTemplateModel>(
-                                  value: t,
-                                  child: Text(
-                                    '${t.name} (${t.steps.length} stages)',
-                                    overflow: TextOverflow.ellipsis,
+                        // Mandatory Production Type Selector: CUTTING or NON-CUTTING
+                        Text(
+                          'Production Workflow Type *',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: theme.colorScheme.onSurface,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Expanded(
+                              child: InkWell(
+                                onTap: isSaving
+                                    ? null
+                                    : () {
+                                        if (selectedProductionType == ProductionWorkflows.cutting) return;
+                                        if (stageAssignments.isNotEmpty) {
+                                          showDialog(
+                                            context: context,
+                                            builder: (confirmCtx) => AlertDialog(
+                                              title: const Text('Change Workflow Type?'),
+                                              content: const Text(
+                                                'Changing to Cutting will reset your custom stage employee assignments. Do you wish to continue?',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(confirmCtx),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: theme.colorScheme.primary,
+                                                    foregroundColor: Colors.white,
+                                                  ),
+                                                  onPressed: () {
+                                                    Navigator.pop(confirmCtx);
+                                                    setDialogState(() {
+                                                      selectedProductionType = ProductionWorkflows.cutting;
+                                                      stageAssignments.clear();
+                                                    });
+                                                  },
+                                                  child: const Text('Confirm & Switch'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        } else {
+                                          setDialogState(() {
+                                            selectedProductionType = ProductionWorkflows.cutting;
+                                          });
+                                        }
+                                      },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: selectedProductionType == ProductionWorkflows.cutting
+                                        ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.25 : 0.12)
+                                        : (isDark ? const Color(0xFF131D31) : const Color(0xFFF8FAFC)),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: selectedProductionType == ProductionWorkflows.cutting
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.outline,
+                                      width: selectedProductionType == ProductionWorkflows.cutting ? 1.8 : 1.0,
+                                    ),
                                   ),
-                                );
-                              }).toList(),
-                              onChanged: isSaving
-                                  ? null
-                                  : (t) {
-                                      setDialogState(() {
-                                        selectedTemplate = t;
-                                      });
-                                    },
-                              validator: (v) => v == null ? 'Please select a routing template' : null,
-                            );
-                          },
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        selectedProductionType == ProductionWorkflows.cutting
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_off,
+                                        size: 18,
+                                        color: selectedProductionType == ProductionWorkflows.cutting
+                                            ? theme.colorScheme.primary
+                                            : theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Cutting',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: selectedProductionType == ProductionWorkflows.cutting
+                                                    ? theme.colorScheme.primary
+                                                    : theme.colorScheme.onSurface,
+                                              ),
+                                            ),
+                                            Text(
+                                              '14 Stages Workflow',
+                                              style: TextStyle(fontSize: 10.5, color: theme.colorScheme.onSurfaceVariant),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 10),
+                            Expanded(
+                              child: InkWell(
+                                onTap: isSaving
+                                    ? null
+                                    : () {
+                                        if (selectedProductionType == ProductionWorkflows.nonCutting) return;
+                                        if (stageAssignments.isNotEmpty) {
+                                          showDialog(
+                                            context: context,
+                                            builder: (confirmCtx) => AlertDialog(
+                                              title: const Text('Change Workflow Type?'),
+                                              content: const Text(
+                                                'Changing to Non-Cutting will reset your custom stage employee assignments. Do you wish to continue?',
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () => Navigator.pop(confirmCtx),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                ElevatedButton(
+                                                  style: ElevatedButton.styleFrom(
+                                                    backgroundColor: theme.colorScheme.primary,
+                                                    foregroundColor: Colors.white,
+                                                  ),
+                                                  onPressed: () {
+                                                    Navigator.pop(confirmCtx);
+                                                    setDialogState(() {
+                                                      selectedProductionType = ProductionWorkflows.nonCutting;
+                                                      stageAssignments.clear();
+                                                    });
+                                                  },
+                                                  child: const Text('Confirm & Switch'),
+                                                ),
+                                              ],
+                                            ),
+                                          );
+                                        } else {
+                                          setDialogState(() {
+                                            selectedProductionType = ProductionWorkflows.nonCutting;
+                                          });
+                                        }
+                                      },
+                                borderRadius: BorderRadius.circular(8),
+                                child: Container(
+                                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                                  decoration: BoxDecoration(
+                                    color: selectedProductionType == ProductionWorkflows.nonCutting
+                                        ? theme.colorScheme.primary.withValues(alpha: isDark ? 0.25 : 0.12)
+                                        : (isDark ? const Color(0xFF131D31) : const Color(0xFFF8FAFC)),
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: selectedProductionType == ProductionWorkflows.nonCutting
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.outline,
+                                      width: selectedProductionType == ProductionWorkflows.nonCutting ? 1.8 : 1.0,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        selectedProductionType == ProductionWorkflows.nonCutting
+                                            ? Icons.radio_button_checked
+                                            : Icons.radio_button_off,
+                                        size: 18,
+                                        color: selectedProductionType == ProductionWorkflows.nonCutting
+                                            ? theme.colorScheme.primary
+                                            : theme.colorScheme.onSurfaceVariant,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              'Non-Cutting',
+                                              style: TextStyle(
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w700,
+                                                color: selectedProductionType == ProductionWorkflows.nonCutting
+                                                    ? theme.colorScheme.primary
+                                                    : theme.colorScheme.onSurface,
+                                              ),
+                                            ),
+                                            Text(
+                                              '15 Stages Workflow',
+                                              style: TextStyle(fontSize: 10.5, color: theme.colorScheme.onSurfaceVariant),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                         const SizedBox(height: 12),
 
@@ -215,7 +387,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                           builder: (context, ref, _) {
                             final employees = ref.watch(employeesStreamProvider).value ?? [];
                             final activeEmployees = employees.where((e) => e.isActive).toList();
-                            final templateSteps = selectedTemplate?.steps ?? ProcessTemplateModel.default17Stages();
+                            final templateSteps = ProductionWorkflows.getStages(selectedProductionType);
 
                             return Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
@@ -542,10 +714,11 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                     ? null
                     : () async {
                         if (!formKey.currentState!.validate()) return;
-                        if (selectedProduct == null || selectedTemplate == null) return;
+                        if (selectedProduct == null) return;
 
                         setDialogState(() => isSaving = true);
 
+                        final workflowSteps = ProductionWorkflows.getStages(selectedProductionType);
                         final targetQty = double.tryParse(qtyController.text.trim()) ?? 100;
                         final order = ProductionOrder(
                           id: '',
@@ -556,6 +729,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                           unit: selectedProduct!.unit,
                           status: 'scheduled',
                           priority: priorityController.text,
+                          productionType: selectedProductionType,
                           customerName: selectedProduct?.customerReference ?? '',
                           notes: notesController.text.trim(),
                           startDate: startDate,
@@ -567,7 +741,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                           await ref.read(productionRepositoryProvider).createOrderWithSnapshottedTemplate(
                                 orgId: orgId,
                                 order: order,
-                                templateSteps: selectedTemplate!.steps,
+                                templateSteps: workflowSteps,
                                 assignedEmployeeUid: selectedEmployeeUid,
                                 assignedEmployeeName: selectedEmployeeName,
                                 stageAssignmentsBySequence: stageAssignments.isNotEmpty ? stageAssignments : null,
@@ -577,7 +751,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                             messenger.showSnackBar(
                               SnackBar(
                                 content: Text(
-                                  'Work order ${order.orderNumber} launched with ${selectedTemplate!.steps.length} stages!',
+                                  'Work order ${order.orderNumber} launched with ${ProductionWorkflows.getLabel(selectedProductionType)}!',
                                 ),
                                 backgroundColor: tokens.success,
                                 behavior: SnackBarBehavior.floating,
@@ -635,46 +809,48 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
             'Update Order Progress',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface),
           ),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                '${order.orderNumber} - ${order.productName}',
-                style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: theme.colorScheme.onSurface),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                'Target: ${order.targetQuantity.toStringAsFixed(0)} ${order.unit}',
-                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: qtyController,
-                keyboardType: TextInputType.number,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Completed Quantity (${order.unit})',
-                  prefixIcon: const Icon(Icons.check_circle_outline_rounded),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '${order.orderNumber} - ${order.productName}',
+                  style: TextStyle(fontWeight: FontWeight.w600, fontSize: 14, color: theme.colorScheme.onSurface),
                 ),
-              ),
-              const SizedBox(height: 12),
-              DropdownButtonFormField<String>(
-                initialValue: selectedStatus,
-                isExpanded: true,
-                decoration: const InputDecoration(
-                  labelText: 'Order Status',
-                  prefixIcon: Icon(Icons.sync_rounded),
+                const SizedBox(height: 4),
+                Text(
+                  'Target: ${order.targetQuantity.toStringAsFixed(0)} ${order.unit}',
+                  style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                 ),
-                items: const [
-                  DropdownMenuItem(value: 'scheduled', child: Text('Scheduled', overflow: TextOverflow.ellipsis)),
-                  DropdownMenuItem(value: 'in_production', child: Text('In Production', overflow: TextOverflow.ellipsis)),
-                  DropdownMenuItem(value: 'completed', child: Text('Completed', overflow: TextOverflow.ellipsis)),
-                  DropdownMenuItem(value: 'on_hold', child: Text('On Hold', overflow: TextOverflow.ellipsis)),
-                ],
-                onChanged: isSaving ? null : (v) => setDialogState(() => selectedStatus = v ?? selectedStatus),
-              ),
-            ],
+                const SizedBox(height: 16),
+                TextField(
+                  controller: qtyController,
+                  keyboardType: TextInputType.number,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    labelText: 'Completed Quantity (${order.unit})',
+                    prefixIcon: const Icon(Icons.check_circle_outline_rounded),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  initialValue: selectedStatus,
+                  isExpanded: true,
+                  decoration: const InputDecoration(
+                    labelText: 'Order Status',
+                    prefixIcon: Icon(Icons.sync_rounded),
+                  ),
+                  items: const [
+                    DropdownMenuItem(value: 'scheduled', child: Text('Scheduled', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'in_production', child: Text('In Production', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'completed', child: Text('Completed', overflow: TextOverflow.ellipsis)),
+                    DropdownMenuItem(value: 'on_hold', child: Text('On Hold', overflow: TextOverflow.ellipsis)),
+                  ],
+                  onChanged: isSaving ? null : (v) => setDialogState(() => selectedStatus = v ?? selectedStatus),
+                ),
+              ],
+            ),
           ),
           actions: [
             TextButton(
@@ -741,6 +917,8 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
       final theme = Theme.of(context);
       final tokens = context.adminTokens;
       final isDark = theme.brightness == Brightness.dark;
+      final screenWidth = MediaQuery.sizeOf(context).width;
+      final screenHeight = MediaQuery.sizeOf(context).height;
 
       showDialog(
         context: context,
@@ -790,9 +968,13 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                 ),
               ],
             ),
-            content: SizedBox(
-              width: 580,
-              child: Consumer(
+            content: ConstrainedBox(
+              constraints: BoxConstraints(
+                maxWidth: min(580.0, screenWidth - 32),
+              ),
+              child: SizedBox(
+                width: double.maxFinite,
+                child: Consumer(
                 builder: (context, ref, _) {
                   final processesAsync = ref.watch(orderProcessesStreamProvider(order.id));
                   final employeesAsync = ref.watch(employeesStreamProvider);
@@ -904,7 +1086,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                       ),
                       const SizedBox(height: 8),
                       SizedBox(
-                        height: 380,
+                        height: min(380.0, screenHeight * 0.45),
                         child: ListView.separated(
                           itemCount: processes.length,
                           separatorBuilder: (_, _) => const SizedBox(height: 8),
@@ -1038,6 +1220,7 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                 },
               ),
             ),
+          ),
             actions: [
               TextButton(
                 onPressed: () => Navigator.pop(ctx),
@@ -1365,162 +1548,176 @@ class _ProductionListScreenState extends ConsumerState<ProductionListScreen>
                           final order = filtered[index];
                           final pct = order.progressPercentage;
 
-                          return Container(
-                            padding: const EdgeInsets.all(16),
-                            decoration: BoxDecoration(
-                              color: theme.colorScheme.surface,
+                          return Material(
+                            color: Colors.transparent,
+                            child: InkWell(
                               borderRadius: BorderRadius.circular(10),
-                              border: Border.all(color: theme.colorScheme.outline),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  children: [
-                                    Container(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                                      decoration: BoxDecoration(
-                                        color: tokens.primarySoft,
-                                        borderRadius: BorderRadius.circular(6),
-                                      ),
-                                      child: Text(
-                                        order.orderNumber,
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w700,
-                                          color: theme.colorScheme.primary,
-                                          fontFamily: 'monospace',
-                                        ),
-                                      ),
-                                    ),
-                                    if (order.priority.toLowerCase() == 'urgent' ||
-                                        order.priority.toLowerCase() == 'high') ...[
-                                      const SizedBox(width: 8),
-                                      StatusChip(
-                                        label: order.priority.toUpperCase(),
-                                        variant: order.priority.toLowerCase() == 'urgent'
-                                            ? StatusVariant.error
-                                            : StatusVariant.warning,
-                                        icon: Icons.flag_rounded,
-                                      ),
-                                    ],
-                                    const Spacer(),
-                                    StatusChip.fromStatus(order.status),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                Text(
-                                  order.productName,
-                                  style: TextStyle(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: theme.colorScheme.onSurface,
+                              onTap: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (context) => ProductionDetailsScreen(order: order),
                                   ),
+                                );
+                              },
+                              child: Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: BoxDecoration(
+                                  color: theme.colorScheme.surface,
+                                  borderRadius: BorderRadius.circular(10),
+                                  border: Border.all(color: theme.colorScheme.outline),
                                 ),
-                                const SizedBox(height: 8),
-
-                                // Progress bar & metrics
-                                Row(
-                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
+                                    Wrap(
+                                      alignment: WrapAlignment.spaceBetween,
+                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      spacing: 8,
+                                      runSpacing: 6,
+                                      children: [
+                                        Wrap(
+                                          crossAxisAlignment: WrapCrossAlignment.center,
+                                          spacing: 8,
+                                          runSpacing: 4,
+                                          children: [
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                                              decoration: BoxDecoration(
+                                                color: tokens.primarySoft,
+                                                borderRadius: BorderRadius.circular(6),
+                                              ),
+                                              child: Text(
+                                                order.orderNumber,
+                                                style: TextStyle(
+                                                  fontSize: 12,
+                                                  fontWeight: FontWeight.w700,
+                                                  color: theme.colorScheme.primary,
+                                                  fontFamily: 'monospace',
+                                                ),
+                                              ),
+                                            ),
+                                            Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                              decoration: BoxDecoration(
+                                                color: order.isCutting
+                                                    ? Colors.orange.withValues(alpha: isDark ? 0.25 : 0.12)
+                                                    : Colors.blue.withValues(alpha: isDark ? 0.25 : 0.12),
+                                                borderRadius: BorderRadius.circular(4),
+                                                border: Border.all(
+                                                  color: order.isCutting
+                                                      ? Colors.orange.withValues(alpha: 0.5)
+                                                      : Colors.blue.withValues(alpha: 0.5),
+                                                ),
+                                              ),
+                                              child: Text(
+                                                order.isCutting ? 'CUTTING (14)' : 'NON-CUTTING (15)',
+                                                style: TextStyle(
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                  color: order.isCutting ? Colors.orange[800] : Colors.blue[800],
+                                                ),
+                                              ),
+                                            ),
+                                            if (order.priority.toLowerCase() == 'urgent' ||
+                                                order.priority.toLowerCase() == 'high')
+                                              StatusChip(
+                                                label: order.priority.toUpperCase(),
+                                                variant: order.priority.toLowerCase() == 'urgent'
+                                                    ? StatusVariant.error
+                                                    : StatusVariant.warning,
+                                                icon: Icons.flag_rounded,
+                                              ),
+                                          ],
+                                        ),
+                                        StatusChip.fromStatus(order.status),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
                                     Text(
-                                      'Batch: ${order.completedQuantity.toStringAsFixed(0)} / ${order.targetQuantity.toStringAsFixed(0)} ${order.unit}',
+                                      order.productName,
                                       style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
                                         color: theme.colorScheme.onSurface,
                                       ),
                                     ),
-                                    Text(
-                                      '${(pct * 100).toStringAsFixed(0)}%',
-                                      style: TextStyle(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w700,
-                                        color: theme.colorScheme.primary,
+                                    const SizedBox(height: 8),
+
+                                    // Progress bar & metrics
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Batch: ${order.completedQuantity.toStringAsFixed(0)} / ${order.targetQuantity.toStringAsFixed(0)} ${order.unit}',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                            color: theme.colorScheme.onSurface,
+                                          ),
+                                        ),
+                                        Text(
+                                          '${(pct * 100).toStringAsFixed(0)}%',
+                                          style: TextStyle(
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 6),
+                                    ClipRRect(
+                                      borderRadius: BorderRadius.circular(4),
+                                      child: LinearProgressIndicator(
+                                        value: pct,
+                                        minHeight: 6,
+                                        backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
+                                        valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
                                       ),
                                     ),
-                                  ],
-                                ),
-                                const SizedBox(height: 6),
-                                ClipRRect(
-                                  borderRadius: BorderRadius.circular(4),
-                                  child: LinearProgressIndicator(
-                                    value: pct,
-                                    minHeight: 6,
-                                    backgroundColor: isDark ? const Color(0xFF1E293B) : const Color(0xFFE2E8F0),
-                                    valueColor: AlwaysStoppedAnimation<Color>(theme.colorScheme.primary),
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
+                                    const SizedBox(height: 12),
 
-                                Wrap(
-                                  alignment: WrapAlignment.spaceBetween,
-                                  crossAxisAlignment: WrapCrossAlignment.center,
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  children: [
-                                    if (order.dueDate != null)
-                                      Row(
-                                        mainAxisSize: MainAxisSize.min,
-                                        children: [
-                                          Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
-                                          const SizedBox(width: 4),
-                                          Text(
-                                            'Due: ${order.dueDate!.day}/${order.dueDate!.month}/${order.dueDate!.year}',
-                                            style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-                                          ),
-                                        ],
-                                      )
-                                    else
-                                      const SizedBox.shrink(),
-                                    Wrap(
-                                      spacing: 6,
-                                      runSpacing: 6,
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        OutlinedButton.icon(
-                                          onPressed: () {
-                                            Navigator.of(context).push(
-                                              MaterialPageRoute(
-                                                builder: (context) => ProductionDetailsScreen(order: order),
+                                        if (order.dueDate != null)
+                                          Row(
+                                            mainAxisSize: MainAxisSize.min,
+                                            children: [
+                                              Icon(Icons.event_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant),
+                                              const SizedBox(width: 4),
+                                              Text(
+                                                'Due: ${order.dueDate!.day}/${order.dueDate!.month}/${order.dueDate!.year}',
+                                                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
                                               ),
-                                            );
-                                          },
-                                          icon: const Icon(Icons.account_tree_outlined, size: 14),
-                                          label: const Text('17 Stages'),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            visualDensity: VisualDensity.compact,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                        OutlinedButton.icon(
-                                          onPressed: () => _showAssignStageDialog(context, orgId, order),
-                                          icon: const Icon(Icons.person_add_alt_1_rounded, size: 14),
-                                          label: const Text('Assign Stage'),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            visualDensity: VisualDensity.compact,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                          ),
-                                        ),
-                                        OutlinedButton.icon(
-                                          onPressed: () => _showUpdateProgressDialog(context, orgId, order),
-                                          icon: const Icon(Icons.edit_outlined, size: 14),
-                                          label: const Text('Progress'),
-                                          style: OutlinedButton.styleFrom(
-                                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                            visualDensity: VisualDensity.compact,
-                                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
-                                            textStyle: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
-                                          ),
+                                            ],
+                                          )
+                                        else
+                                          const SizedBox.shrink(),
+                                        Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              'View Workflow Details',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                                color: theme.colorScheme.primary,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Icon(
+                                              Icons.arrow_forward_ios_rounded,
+                                              size: 11,
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                          ],
                                         ),
                                       ],
                                     ),
                                   ],
                                 ),
-                              ],
+                              ),
                             ),
                           );
                         },

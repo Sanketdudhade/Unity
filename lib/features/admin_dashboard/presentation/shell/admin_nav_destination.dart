@@ -61,6 +61,13 @@ class AdminNavDestination {
       selectedIcon: Icons.badge_rounded,
       group: 'Management',
     ),
+    AdminNavDestination(
+      title: 'Billing & Invoices',
+      route: RouteNames.adminBilling,
+      icon: Icons.receipt_long_outlined,
+      selectedIcon: Icons.receipt_long_rounded,
+      group: 'Management',
+    ),
 
     // Insights Group
     AdminNavDestination(
@@ -87,6 +94,7 @@ class AdminNavDestination {
     if (location.startsWith(RouteNames.adminEmployees)) return 'Personnel & Roles';
     if (location.startsWith(RouteNames.adminQueries)) return 'Shop-Floor Queries';
     if (location.startsWith(RouteNames.adminReports)) return 'Operational Reports & Audits';
+    if (location.startsWith(RouteNames.adminBilling)) return 'Billing & Invoices';
     if (location.startsWith(RouteNames.profile)) return 'Administrator Profile';
     return 'Admin Console';
   }

@@ -247,13 +247,17 @@ class _InfoRow extends StatelessWidget {
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 13,
-              color: theme.colorScheme.onSurfaceVariant,
+          Flexible(
+            flex: 2,
+            child: Text(
+              label,
+              style: TextStyle(
+                fontSize: 13,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
             ),
           ),
+          const SizedBox(width: 12),
           if (statusVariant != null)
             StatusChip(
               label: value.toUpperCase(),
@@ -261,6 +265,7 @@ class _InfoRow extends StatelessWidget {
             )
           else
             Flexible(
+              flex: 3,
               child: Text(
                 value,
                 textAlign: TextAlign.right,

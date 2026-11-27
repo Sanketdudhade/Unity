@@ -122,44 +122,52 @@ class ProcessTaskCard extends ConsumerWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Header Row: Work Order, Priority Badge, Status Badge
-            Row(
+            // Header: Work Order, Priority Badge, Status Badge (Responsive Wrap)
+            Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 8,
+              runSpacing: 6,
               children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF0F766E),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    task.workOrder,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 11,
-                      letterSpacing: 0.5,
-                    ),
-                  ),
-                ),
-                if (isUrgent || isHigh) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: (isUrgent ? tokens.danger : tokens.warning).withValues(alpha: isDark ? 0.25 : 0.12),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: Text(
-                      isUrgent ? 'URGENT' : 'HIGH PRIORITY',
-                      style: TextStyle(
-                        color: isUrgent ? tokens.danger : tokens.warning,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF0F766E),
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: Text(
+                        task.workOrder,
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 11,
+                          letterSpacing: 0.5,
+                        ),
                       ),
                     ),
-                  ),
-                ],
-                const Spacer(),
+                    if (isUrgent || isHigh)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: (isUrgent ? tokens.danger : tokens.warning).withValues(alpha: isDark ? 0.25 : 0.12),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                        child: Text(
+                          isUrgent ? 'URGENT' : 'HIGH PRIORITY',
+                          style: TextStyle(
+                            color: isUrgent ? tokens.danger : tokens.warning,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
@@ -210,24 +218,31 @@ class ProcessTaskCard extends ConsumerWidget {
               children: [
                 Icon(Icons.precision_manufacturing_outlined, size: 14, color: textSecondary),
                 const SizedBox(width: 4),
-                Text(
-                  task.stage,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: textSecondary,
-                    fontWeight: FontWeight.w600,
+                Flexible(
+                  flex: 3,
+                  child: Text(
+                    task.stage,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textSecondary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-                const SizedBox(width: 14),
+                const SizedBox(width: 10),
                 Icon(Icons.person_outline_rounded, size: 14, color: textSecondary),
                 const SizedBox(width: 4),
-                Expanded(
+                Flexible(
+                  flex: 2,
                   child: Text(
                     task.assignedToName.isNotEmpty ? task.assignedToName : 'Shop-Floor',
                     style: TextStyle(
                       fontSize: 12,
                       color: textSecondary,
                     ),
+                    maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
